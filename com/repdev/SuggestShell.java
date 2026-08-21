@@ -39,9 +39,7 @@ import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.events.ShellAdapter;
 import org.eclipse.swt.events.ShellEvent;
 import org.eclipse.swt.events.VerifyEvent;
-import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Point;
-import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
@@ -157,7 +155,7 @@ public class SuggestShell {
 				for( Snippet cur : SnippetManager.getInstance().snippets){
 
 					TableItem item = new TableItem(table, SWT.NONE);
-					ArrayList<StyleRange> ranges = new ArrayList<StyleRange>();
+					ArrayList<StyleRange> ranges = new ArrayList<>();
 
 					item.setText(cur.getTitle());
 					item.setImage(RepDevMain.smallSnippetImage);
@@ -309,7 +307,7 @@ public class SuggestShell {
 					if( func.getName().toLowerCase().startsWith(funcName)){
 						TableItem item = new TableItem(table,SWT.NONE);
 						String nameText = func.getName().toUpperCase() + "(";
-						ArrayList<StyleRange> ranges = new ArrayList<StyleRange>();
+						ArrayList<StyleRange> ranges = new ArrayList<>();
 
 						for( Argument arg : func.getArguments())
 							nameText += arg.getShortName() + ", ";
@@ -355,7 +353,7 @@ public class SuggestShell {
 					if( word.getName().toLowerCase().startsWith(funcName)){
 						TableItem item = new TableItem(table,SWT.NONE);
 						String nameText = word.getName().toUpperCase();
-						ArrayList<StyleRange> ranges = new ArrayList<StyleRange>();
+						ArrayList<StyleRange> ranges = new ArrayList<>();
 
 								
 						item.setText(nameText);
@@ -697,7 +695,6 @@ public class SuggestShell {
 		shell.setSize(280, 180);
 		tooltip.setSize(250,180);
 
-		// shell.open();
 		txt.setFocus();
 	}
 	

@@ -82,7 +82,7 @@ public class SymLoginShell {
 		layout.marginRight = 5;
 		layout.spacing = 5;
 
-		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM);
+		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE);
 		shell.setText("Sym Login");
 		shell.setLayout(layout);
 		shell.setImage(RepDevMain.smallSymAddImage);
@@ -137,10 +137,7 @@ public class SymLoginShell {
 				try {
 					sym = Integer.parseInt(symText.getText().trim());
 				} catch (Exception ex) {
-					MessageBox dialog = new MessageBox(shell, SWT.ICON_ERROR | SWT.OK);
-					dialog.setMessage("The Sym number you entered was invalid");
-					dialog.setText("Input Error");
-					dialog.open();
+					DialogUtil.error(shell, "Input Error", "The Sym number you entered was invalid");
 					symText.setFocus();
 					return;
 				}
@@ -322,10 +319,7 @@ public class SymLoginShell {
 	public static int symLogin(Display display, Shell parent, int sym) {
 		me.create(parent, sym);
 
-		while (!me.shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(me.shell);
 
 		if (me.result != -1)
 			me.symLogin();

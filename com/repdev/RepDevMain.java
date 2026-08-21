@@ -50,8 +50,8 @@ import org.eclipse.swt.widgets.MessageBox;
  * @author Jake Poznanski, Ryan Schultz, Sean Delaney
  */
 public class RepDevMain {
-	public static final HashMap<Integer, SymitarSession> SYMITAR_SESSIONS = new HashMap<Integer, SymitarSession>();
-	public static HashMap<Integer, SessionInfo> SESSION_INFO = new HashMap<Integer, SessionInfo>();
+	public static final HashMap<Integer, SymitarSession> SYMITAR_SESSIONS = new HashMap<>();
+	public static HashMap<Integer, SessionInfo> SESSION_INFO = new HashMap<>();
 	public static byte [] MASTER_PASSWORD_HASH;
 	public static final boolean DEVELOPER = false; //Set this flag to enable saving passwords, this makes it easy for developers to log in and check stuff quickly after making changes
 	public static final int VMAJOR = 1;
@@ -228,11 +228,9 @@ public class RepDevMain {
 			loadFile = userFile;
 		}
 
-		try {
-			ObjectInputStream in = new ObjectInputStream(new FileInputStream(loadFile));
+		try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(loadFile))) {
 			Config configObject = (Config) in.readObject();
 			Config.setConfig(configObject);
-			in.close();
 		} catch (ClassCastException e) {
 			System.out.println("FILE OUT OF DATE!");
 		} catch (IOException e) {
@@ -254,7 +252,7 @@ public class RepDevMain {
 		
 		SESSION_INFO = Config.getSessionInfo();
 		if(SESSION_INFO == null) {
-			SESSION_INFO = new HashMap<Integer, SessionInfo>();
+			SESSION_INFO = new HashMap<>();
 		}
 		
 		SymitarSession session;
@@ -297,8 +295,8 @@ public class RepDevMain {
 	public static void saveSettings() {
 		try {
 			// Write the current syms to the Config file
-			ArrayList<Integer> newSyms = new ArrayList<Integer>();
-			HashMap<Integer, SessionInfo> newSessionInfo = new HashMap<Integer, SessionInfo>();
+			ArrayList<Integer> newSyms = new ArrayList<>();
+			HashMap<Integer, SessionInfo> newSessionInfo = new HashMap<>();
 
 			for (int sym : SYMITAR_SESSIONS.keySet()) {
 				newSyms.add(sym);
@@ -315,9 +313,9 @@ public class RepDevMain {
 				Config.setLastUserID("");
 			}
 
-			ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream("repdev.conf"));
-			out.writeObject(Config.getConfig());
-			out.close();
+			try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream("repdev.conf"))) {
+				out.writeObject(Config.getConfig());
+			}
 		} catch (Exception e) {
 			System.err.println("Error saving Config data");
 			e.printStackTrace();

@@ -20,7 +20,6 @@
 package com.repdev;
 
 import org.eclipse.swt.SWT;
-import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.Shell;
 
 public enum SessionError {
@@ -29,11 +28,7 @@ public enum SessionError {
 	NOT_WINDOWSLEVEL_3_PASS_WILL_EXPIRE, INCOMPATIBLE_REVISION, UNDEFINED_ERROR, AIX_PASSWORD_TO_EXPIRE, AIX_PASSWORD_EXPIRED, SSH_KEY_CHANGED, FILE_READ_ONLY, DBMS_NOT_AVAILABLE;
 	
 	public void showError(){
-		MessageBox dialog = new MessageBox(new Shell(),SWT.OK | SWT.ICON_ERROR);
-		dialog.setText("Error in host connection");
-		dialog.setMessage("Error connecting to server, check network connections");
-		dialog.setMessage(getErrorString());
-		dialog.open();
+		DialogUtil.error(new Shell(), "Error in host connection", getErrorString());
 	}
 
 	public String getErrorString(){

@@ -58,7 +58,7 @@ public class FMShell {
 		layout.marginRight = 5;
 		layout.spacing = 5;
 
-		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM);
+		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE);
 		shell.setText("Run FM Options");
 		shell.setLayout(layout);
 		
@@ -340,10 +340,7 @@ public class FMShell {
 		FMShell dialog = new FMShell(); 
 		dialog.create(parent, sym, title);
 
-		while (!dialog.shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(dialog.shell);
 
 		return dialog.result;
 	}

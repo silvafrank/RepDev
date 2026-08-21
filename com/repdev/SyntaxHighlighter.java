@@ -163,8 +163,22 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 
 	public static void loadStyle(String styleName){
 		System.out.println("Loading theme " + styleName + ".xml");
+
+		// Both branches below reassign these static Color/EStyle fields with freshly
+		// allocated SWT resources; capture the previous ones so they can be disposed once
+		// the new set is in place, instead of leaking a whole Color/EStyle handle set on
+		// every theme switch (this runs each time the user changes the editor theme in
+		// OptionsShell).
+		Color oldForecolor = FORECOLOR, oldBackcolor = BACKCOLOR, oldCustomColor = customColor,
+				oldTokenColor = tokenColor, oldBullets = BULLETS;
+		EStyle oldNormal = NORMAL, oldComments = COMMENTS, oldVariables = VARIABLES,
+				oldFunctions = FUNCTIONS, oldKeywords = KEYWORDS, oldTypeChar = TYPE_CHAR,
+				oldTypeDate = TYPE_DATE, oldStruct1 = STRUCT1, oldStruct2 = STRUCT2,
+				oldStruct1Invalid = STRUCT1_INVALID, oldStruct2Invalid = STRUCT2_INVALID,
+				oldTask = TASK;
+
 		try{
-			Style style = new Style( new File("styles\\" + styleName + ".xml" ));
+			Style style = new Style( new File("styles", styleName + ".xml" ));
 			FONT_NAME = style.getFontValue("editor", "font"); // "Courier New";
 			FONT_SIZE = style.getFontSize("editor", "fontSize"); // 11;
 			BACKGROUND = style.getColor("editor", "bgColor");  // just... don't...
@@ -217,6 +231,29 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 			tokenColor = new Color(Display.getCurrent(), new RGB(192,192,192));
 			BULLETS = new Color(Display.getCurrent(),new RGB(127, 127, 127));
 		}
+
+		disposeIfNotNull(oldForecolor);
+		disposeIfNotNull(oldBackcolor);
+		disposeIfNotNull(oldCustomColor);
+		disposeIfNotNull(oldTokenColor);
+		disposeIfNotNull(oldBullets);
+		if (oldNormal != null) oldNormal.dispose();
+		if (oldComments != null) oldComments.dispose();
+		if (oldVariables != null) oldVariables.dispose();
+		if (oldFunctions != null) oldFunctions.dispose();
+		if (oldKeywords != null) oldKeywords.dispose();
+		if (oldTypeChar != null) oldTypeChar.dispose();
+		if (oldTypeDate != null) oldTypeDate.dispose();
+		if (oldStruct1 != null) oldStruct1.dispose();
+		if (oldStruct2 != null) oldStruct2.dispose();
+		if (oldStruct1Invalid != null) oldStruct1Invalid.dispose();
+		if (oldStruct2Invalid != null) oldStruct2Invalid.dispose();
+		if (oldTask != null) oldTask.dispose();
+	}
+
+	private static void disposeIfNotNull(Color c) {
+		if (c != null && !c.isDisposed())
+			c.dispose();
 	}
 
 	private static class EStyle {
@@ -233,6 +270,13 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 
 		public EStyle(RGB frgb, RGB bgrgb) {
 			this(frgb, bgrgb, SWT.NORMAL);
+		}
+
+		public void dispose() {
+			if (fcolor != null && !fcolor.isDisposed())
+				fcolor.dispose();
+			if (bgcolor != null && !bgcolor.isDisposed())
+				bgcolor.dispose();
 		}
 
 		public StyleRange getRange(int start, int len) {

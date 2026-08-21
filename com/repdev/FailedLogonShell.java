@@ -20,7 +20,7 @@ public class FailedLogonShell {
 	private String newPass;
 	
 	private void create() {
-		failShell = new Shell(SWT.APPLICATION_MODAL | SWT.TITLE | SWT.CLOSE);
+		failShell = new Shell(SWT.APPLICATION_MODAL | SWT.TITLE | SWT.CLOSE | SWT.RESIZE);
 		failShell.setText("Invalid Password");
 		failShell.setImage(RepDevMain.smallSymAddImage);
 		
@@ -74,10 +74,7 @@ public class FailedLogonShell {
 		failShell.pack();
 		failShell.open();
 		
-		while (!failShell.isDisposed()) {
-			if (!failShell.getDisplay().readAndDispatch())
-				failShell.getDisplay().sleep();
-		}
+		DialogUtil.pumpUntilClosed(failShell);
 	}
 	
 	public static String checkPass() {

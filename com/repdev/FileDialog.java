@@ -43,10 +43,9 @@ import org.eclipse.swt.widgets.*;
  */
 public class FileDialog {
 	Shell shell, parent;
-	Display display;
 	Mode mode;
 	int sym;
-	ArrayList<SymitarFile> files = new ArrayList<SymitarFile>();
+	ArrayList<SymitarFile> files = new ArrayList<>();
 	Table table;
 	Combo typeCombo;
 	Text nameText;
@@ -63,14 +62,12 @@ public class FileDialog {
 		this.parent = parent;
 		this.mode = mode;
 		this.sym = sym;
-		this.display = parent.getDisplay();
 	}
-	
+
 	public FileDialog(Shell parent, Mode mode, String dir) {
 		this.parent = parent;
 		this.mode = mode;
 		this.dir = dir;
-		this.display = parent.getDisplay();
 	}
 
 	private void create() {
@@ -305,16 +302,13 @@ public class FileDialog {
 			
 			shell.close();
 		} else {
-			MessageBox dialog = new MessageBox(shell, SWT.ICON_ERROR | SWT.OK);
-			dialog.setText("File Save");
-			dialog.setMessage("File name too long.  It must be 31 characters or less");
-			dialog.open();
+			DialogUtil.error(shell, "File Save", "File name too long.  It must be 31 characters or less");
 		}
 	}
 
 	private void createList() {
 		table.removeAll();
-		ArrayList<SymitarFile> fileList = new ArrayList<SymitarFile>();
+		ArrayList<SymitarFile> fileList = new ArrayList<>();
 		
 		table.setRedraw(false);
 		shell.setCursor(shell.getDisplay().getSystemCursor(SWT.CURSOR_WAIT));
@@ -436,10 +430,7 @@ public class FileDialog {
 	public ArrayList<SymitarFile> open() {
 		create();
 
-		while (!shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(shell);
 
 		return files;
 	}

@@ -29,7 +29,6 @@ import org.eclipse.swt.custom.CTabFolder;
 import org.eclipse.swt.custom.CTabItem;
 import org.eclipse.swt.custom.ExtendedModifyEvent;
 import org.eclipse.swt.custom.ExtendedModifyListener;
-import org.eclipse.swt.custom.StyleRange;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.dnd.DND;
 import org.eclipse.swt.dnd.DragSource;
@@ -63,7 +62,6 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Point;
-import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
@@ -103,8 +101,8 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 	private int prevTxtLine = -1; // Used by the handleCaretChange method to determine if the cursor moved to another line.
 
 	private static final int UNDO_LIMIT = 1000;
-	private Stack<TextChange> undos = new Stack<TextChange>();
-	private Stack<TextChange> redos = new Stack<TextChange>();
+	private Stack<TextChange> undos = new Stack<>();
+	private Stack<TextChange> redos = new Stack<>();
 
 	// 1 = Regular
 	// 2 = Undoing, so save as redos
@@ -231,7 +229,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 			TextChange change;
 
 			if (!undos.empty()) {
-				if (undos.peek().isCommit() == true)
+				if (undos.peek().isCommit())
 					undos.pop();
 
 				undoMode = 2;
@@ -261,10 +259,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 				redos.push(new TextChange(true));
 			}
 		} catch (Exception e) {
-			MessageBox dialog = new MessageBox(this.getShell(), SWT.ICON_ERROR | SWT.OK);
-			dialog.setMessage("The Undo Manager has failed during an Undo!");
-			dialog.setText("ERROR!");
-			dialog.open();
+			DialogUtil.error(this.getShell(), "ERROR!", "The Undo Manager has failed during an Undo!");
 
 			e.printStackTrace();
 		}
@@ -288,7 +283,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 			TextChange change;
 
 			if (!redos.empty()) {
-				if (redos.peek().isCommit() == true)
+				if (redos.peek().isCommit())
 					redos.pop();
 
 				undoMode = 1;
@@ -310,10 +305,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 				undos.push(new TextChange(true));
 			}
 		} catch (Exception e) {
-			MessageBox dialog = new MessageBox(this.getShell(), SWT.ICON_ERROR | SWT.OK);
-			dialog.setMessage("The Undo Manager has failed during a Redo!");
-			dialog.setText("ERROR!");
-			dialog.open();
+			DialogUtil.error(this.getShell(), "ERROR!", "The Undo Manager has failed during a Redo!");
 
 			e.printStackTrace();
 		}
@@ -428,31 +420,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 			if( parser != null)
 				parser.setReparse(false);
 
-			if (direction < 0) {
-				for (int i = startLine; i <= endLine; i++) {
-					int startOffset = txt.getOffsetAtLine(i);
-					int endOffset;
-					String line;
-
-					if( i >= txt.getLineCount() - 1 ){
-						endOffset = txt.getCharCount() ;
-					}
-					else
-						endOffset = txt.getOffsetAtLine(i + 1);
-
-					if( endOffset - 1 <= startOffset)
-						line = "\n";
-					else
-						line = txt.getText(startOffset, endOffset - 1);		
-
-
-//					for (int x = 0; x < Math.min(tabStr.length(), line.length()); x++)
-//						if (line.charAt(x) > 32)
-//							return;
-				}
-			}
 			txt.setRedraw(false);
-			int totalSpaces = 0;
 			for (int i = startLine; i <= endLine; i++) {
 				int startOffset = txt.getOffsetAtLine(i);
 				int endOffset;
@@ -479,8 +447,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 							spaces = x;
 							break;
 						}
-					totalSpaces += spaces; // This is not currently being used
-					
+
 					txt.replaceTextRange(startOffset, endOffset - startOffset, line.substring(Math.min(spaces, line.length())));
 				}
 
@@ -614,16 +581,6 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 		if (file.getType() == FileType.REPGEN){
 			doParse=true;
 			parser = new RepgenParser(txt, file, true);
-//			if(parser.getIncludes().size() == 0){
-//				for(EditorComposite editorComposite :RepDevMain.mainShell.getEditorCompositeList()){
-//					for(Include inc : editorComposite.parser.getIncludes()){
-//						if(inc.getFileName().equalsIgnoreCase(file.getName())){
-//							parser = editorComposite.parser;
-//						}
-//					}
-//				}
-//			}
-				
 		}else{
 			doParse=false;
 			parser = new RepgenParser(txt, file, false);
@@ -1223,14 +1180,6 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 				else if(txt.getSelectionText().equalsIgnoreCase("CALL")) {
 					txt.setCaretOffset(txt.getCaretOffset()+1);
 					gotoDefinition();
-//					Token tmpToken;
-//
-//					tmpToken = getTokenAt(txt.getCaretOffset());
-//					if(tmpToken != null){
-//						if(sec.exist(tmpToken.getStr())){
-//							gotoSection(tmpToken.getStr());
-//						}
-//					}
 				}
 			}
 
@@ -1803,18 +1752,12 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 			}
 			catch(Exception e ){
 				//Alert no Define section Found.
-				MessageBox dialog = new MessageBox(this.getShell(), SWT.ICON_ERROR | SWT.OK);
-				dialog.setMessage("DEFINE Section was not found.  Variable was not added.");
-				dialog.setText("Define Variable");
-				dialog.open();
+				DialogUtil.error(this.getShell(), "Define Variable", "DEFINE Section was not found.  Variable was not added.");
 			}
 		}
 		else{
 			//Alert no Define section Found.
-			MessageBox dialog = new MessageBox(this.getShell(), SWT.ICON_ERROR | SWT.OK);
-			dialog.setMessage("DEFINE Section was not found.  Variable was not added.");
-			dialog.setText("Define Variable");
-			dialog.open();
+			DialogUtil.error(this.getShell(), "Define Variable", "DEFINE Section was not found.  Variable was not added.");
 		}
 	}
 
@@ -2244,7 +2187,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 		Token cur = null;
 		int tokloc = 0;
 		ArrayList<Token> tokens = null;
-		ArrayList<Token> redrawTokens = new ArrayList<Token>();
+		ArrayList<Token> redrawTokens = new ArrayList<>();
 
 		RepDevMain.mainShell.setLineColumn();
 		if( parser == null )
@@ -2300,7 +2243,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 			if(cur.isRealHead())
 			{
 
-				Stack<Token> tStack = new Stack<Token>();
+				Stack<Token> tStack = new Stack<>();
 				tStack.push(cur);
 
 				//tokloc is already set at next token since it was set before the break in the for loop above
@@ -2344,7 +2287,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 			} else if( cur.isRealEnd() )
 			{
 
-				Stack<Token> tStack = new Stack<Token>();
+				Stack<Token> tStack = new Stack<>();
 				tStack.push(cur);
 
 				//tokloc must be moved back, one back to current token, one more back to first one we should be reading

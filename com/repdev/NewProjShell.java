@@ -52,7 +52,7 @@ public class NewProjShell {
 		layout.marginRight = 5;
 		layout.spacing = 5;
 
-		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM);
+		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE);
 		shell.setText("Create new project");
 		shell.setLayout(layout);
 
@@ -120,10 +120,7 @@ public class NewProjShell {
 	public static String askForName(Display display, Shell parent) {
 		me.create(parent);
 
-		while (!me.shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(me.shell);
 
 		return me.result;
 	}

@@ -21,7 +21,7 @@ public class SourceControlSelection {
 	 *  An optional field for the array size is also available.
 	 */
 	public void open(String RepGenName) {
-		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM );
+		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE );
 		//shell.setImage(RepDevMain.xxxxx);
 
 		FormLayout layout = new FormLayout();
@@ -153,9 +153,6 @@ public class SourceControlSelection {
 		shell.pack();
 		shell.open();
 		justOpen.setFocus();
-		while (!shell.isDisposed()) {
-			if (!shell.getDisplay().readAndDispatch())
-				shell.getDisplay().sleep();
-		}
+		DialogUtil.pumpUntilClosed(shell);
 	}
 }

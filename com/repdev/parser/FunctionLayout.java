@@ -50,9 +50,7 @@ public class FunctionLayout {
 		
 		String line = null;
 		
-		try {
-			BufferedReader br = new BufferedReader(new FileReader(new File("functions.txt")));
-			
+		try (BufferedReader br = new BufferedReader(new FileReader(new File("functions.txt")))) {
 			Function cur = null;
 
 			while ((line = br.readLine()) != null) {
@@ -92,8 +90,6 @@ public class FunctionLayout {
 					}
 				}
 			}
-
-			br.close();
 
 			//Sort all alphabetical right now
 			functionList = new ArrayList<Function>(functionMap.values());

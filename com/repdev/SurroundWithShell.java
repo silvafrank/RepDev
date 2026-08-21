@@ -45,7 +45,7 @@ public class SurroundWithShell {
 	}
 		
 	public void open() {
-		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM );
+		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE );
 		FormLayout layout = new FormLayout();
 		layout.marginTop = 10;
 		layout.marginBottom = 10;
@@ -173,10 +173,7 @@ public class SurroundWithShell {
 		
 		shell.pack();
 		shell.open();
-		while (!shell.isDisposed()) {
-			if (!shell.getDisplay().readAndDispatch())
-				shell.getDisplay().sleep();
-		}
+		DialogUtil.pumpUntilClosed(shell);
 		
 	}
 	

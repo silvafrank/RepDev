@@ -55,17 +55,17 @@ public class RepgenParser {
 	private static FunctionLayout functions = FunctionLayout.getInstance();
 	private static KeywordLayout keywords = KeywordLayout.getInstance();
 
-	private ArrayList<Token> ltokens = new ArrayList<Token>();
-	private ArrayList<Variable> lvars = new ArrayList<Variable>();
+	private ArrayList<Token> ltokens = new ArrayList<>();
+	private ArrayList<Variable> lvars = new ArrayList<>();
 
-	private ArrayList<Token> lasttokens = new ArrayList<Token>(); //Tokens added in last parse method call
-	private ArrayList<Token> removedtokens = new ArrayList<Token>(); //Tokens removed
-	private ArrayList<Include> includes = new ArrayList<Include>();
+	private ArrayList<Token> lasttokens = new ArrayList<>(); //Tokens added in last parse method call
+	private ArrayList<Token> removedtokens = new ArrayList<>(); //Tokens removed
+	private ArrayList<Include> includes = new ArrayList<>();
 
-	private ArrayList<Error> errorList = new ArrayList<Error>();
-	private ArrayList<Task> taskList = new ArrayList<Task>();
+	private ArrayList<Error> errorList = new ArrayList<>();
+	private ArrayList<Task> taskList = new ArrayList<>();
 
-	private HashMap<String,ArrayList<Token>> includeTokenChache = new HashMap<String, ArrayList<Token>>();
+	private HashMap<String,ArrayList<Token>> includeTokenChache = new HashMap<>();
 
 	BackgroundSymitarErrorChecker errorCheckerWorker = null;
 	BackgroundIncludeParser includeParserWorker = null;
@@ -121,7 +121,7 @@ public class RepgenParser {
 
 		private void parseCurrentFileAsInclude(String fileName, boolean inDefs){
 			boolean exists = false;
-			ArrayList<Token> tokens = new ArrayList<Token>();
+			ArrayList<Token> tokens = new ArrayList<>();
 			String data = "";
 
 			includes.add(new Include(fileName, inDefs ? Division.DEFINE : Division.NONE));
@@ -134,7 +134,7 @@ public class RepgenParser {
 			if( data == null )
 				return;
 
-			parse(fileName, data, 0, data.length(), 0, null, tokens, new ArrayList<Token>(), new ArrayList<Token>(), new ArrayList<Variable>(),null);
+			parse(fileName, data, 0, data.length(), 0, null, tokens, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),null);
 			
 			includeTokenChache.put(fileName,tokens);
 
@@ -164,7 +164,7 @@ public class RepgenParser {
 
 		public void run(){
 			boolean exists = false;
-			ArrayList<Token> tempTokens = new  ArrayList<Token>();
+			ArrayList<Token> tempTokens = new ArrayList<>();
 
 
 			synchronized(includeTokenChache){//Sync it on the token cache, so other threads can access it safely
@@ -228,7 +228,7 @@ public class RepgenParser {
 		public void run() {
 			final Table tblErrors = RepDevMain.mainShell.getErrorTable();
 			final Table tblTasks  = RepDevMain.mainShell.getTaskTable();
-			ArrayList<Variable> varCache = new ArrayList<Variable>();
+			ArrayList<Variable> varCache = new ArrayList<>();
 
 			if (tblErrors.isDisposed())
 				return;
@@ -429,9 +429,7 @@ public class RepgenParser {
 				// regions still report correctly.
 				try {
 					for (final Token tok : ltokens) {
-						boolean isTask = false;
-						for( String task: taskTokens )
-							if( tok.getStr().equals(task)) isTask = true;
+						boolean isTask = Arrays.asList(taskTokens).contains(tok.getStr());
 
 						if ( tok.getCDepth() > 0 && isTask && ( tok.getAfter()!=null ) && tok.getAfter().getStr().equals(":")) {
 							int[] lc = lineColAt(canonicalSource, tok.getStart());
@@ -478,6 +476,7 @@ public class RepgenParser {
 					}
 				} catch (Exception e) {
 					// TODO: handle exception (Places TC here to fix a crash when a repgen being parsed is closed)
+					e.printStackTrace();
 				}
 
 				// Update the tasks table
@@ -939,8 +938,8 @@ public class RepgenParser {
 	}
 
 	private synchronized void rebuildVars(String fileName, String data, ArrayList<Token> tokens) {
-		ArrayList<Variable> newvars = new ArrayList<Variable>();
-		ArrayList<Variable> oldvars = new ArrayList<Variable>();
+		ArrayList<Variable> newvars = new ArrayList<>();
+		ArrayList<Variable> oldvars = new ArrayList<>();
 
 		boolean changed = false, exists = false;
 
@@ -1068,8 +1067,19 @@ public class RepgenParser {
 			lvars.addAll(newvars);
 		}
 
-		if (changed && fileName.equals(file.getName()))
-			txt.redrawRange(0, txt.getText().length(), false);
+		if (changed && fileName.equals(file.getName())) {
+			// rebuildVars() can run on the background BackgroundIncludeParser thread, so
+			// touching the StyledText widget must be deferred to the UI thread.
+			final StyledText fTxt = txt;
+			if (!fTxt.isDisposed()) {
+				fTxt.getDisplay().asyncExec(new Runnable() {
+					public void run() {
+						if (!fTxt.isDisposed())
+							fTxt.redrawRange(0, fTxt.getText().length(), false);
+					}
+				});
+			}
+		}
 
 	}
 
@@ -1226,7 +1236,7 @@ public class RepgenParser {
 
 	public void reparseAll() {
 		try {
-			ltokens = new ArrayList<Token>();
+			ltokens = new ArrayList<>();
 			String canonical = canonicalSourceText();
 			parse(file.getName(), canonical, 0, canonical.length() - 1, 0, null, ltokens, lasttokens, removedtokens, lvars, txt);
 			rebuildVars(file.getName(), canonical, ltokens);

@@ -34,7 +34,6 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
-import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 
@@ -51,7 +50,7 @@ public class LPTPrintShell {
 		layout.marginRight = 5;
 		layout.spacing = 5;
 
-		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM);
+		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE);
 		shell.setText("Line Printer Options");
 		shell.setLayout(layout);
 		
@@ -307,10 +306,7 @@ public class LPTPrintShell {
 				}
 				
 				if( result != SessionError.NONE){
-					MessageBox dialog = new MessageBox(shell,SWT.OK | SWT.ICON_ERROR);
-					dialog.setText("Print Error");
-					dialog.setMessage(result.toString());
-					dialog.open();
+					DialogUtil.error(shell, "Print Error", result.toString());
 				}
 				
 				shell.dispose();
@@ -332,10 +328,7 @@ public class LPTPrintShell {
 		LPTPrintShell dialog = new LPTPrintShell(); 
 		dialog.create(parent, file);
 
-		while (!dialog.shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(dialog.shell);
 
 		return dialog.result;
 	}

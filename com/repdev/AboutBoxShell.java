@@ -90,7 +90,7 @@ public class AboutBoxShell {
 	}
 	
 	private void createShell() {
-		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM);
+		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE);
 		shell.setText("About RepDev");
 		shell.setImage(RepDevMain.smallProgramIcon);
 		
@@ -101,9 +101,7 @@ public class AboutBoxShell {
 		layout.marginRight = 0;
 		layout.spacing = 0;
 		shell.setLayout(layout);
-		
-		//shell.setBackground(new Color(shell.getDisplay(), 255, 255, 255) );
-		
+
 		final Image logo = new Image(shell.getDisplay(), RepDevMain.IMAGE_DIR + "repdev_logo.png");
 		final Label logoLabel = new Label(shell,SWT.NONE);
 		logoLabel.setImage(logo);
@@ -147,20 +145,23 @@ public class AboutBoxShell {
 		
 		license.addSelectionListener(new SelectionAdapter() {
 			public void widgetSelected(SelectionEvent e) {
-				String gplTxt = "",line;
-				
+				String gplTxt, line;
+				StringBuilder sb = new StringBuilder();
+
 				try {
 					try (BufferedReader gpl = new BufferedReader(new FileReader("GPL.txt"))) {
 						while( (line = gpl.readLine()) != null ) {
-							gplTxt += line.trim() + "\n";
+							sb.append(line.trim()).append("\n");
 						}
 					}
+					gplTxt = sb.toString();
 				} catch (FileNotFoundException e1) {
 					gplTxt = "File not found: GPL.txt";
 				} catch (IOException e2) {
 					System.err.println("IOException in AboutBoxShell2");
+					gplTxt = sb.toString();
 				}
-				
+
 				mainText.setText(gplTxt);
 				inner.pack();
 			}
@@ -199,10 +200,7 @@ public class AboutBoxShell {
 		shell.pack();
 		shell.open();
 		
-		while (!shell.isDisposed()) {
-			if (!shell.getDisplay().readAndDispatch())
-				shell.getDisplay().sleep();
-		}
+		DialogUtil.pumpUntilClosed(shell);
 		
 	}		
 }

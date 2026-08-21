@@ -8,13 +8,11 @@ import java.io.IOException;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Group;
-import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
@@ -30,13 +28,11 @@ public class ProjectBackupShell {
 		me = new ProjectBackupShell();
 		me.create();
 		
-		while( !me.shell.isDisposed() )
-			if( !me.shell.getDisplay().readAndDispatch() )
-				me.shell.getDisplay().sleep();
+		DialogUtil.pumpUntilClosed(me.shell);
 	}
 	
 	private void create() {
-		shell = new Shell(SWT.APPLICATION_MODAL | SWT.CLOSE );
+		shell = new Shell(SWT.APPLICATION_MODAL | SWT.CLOSE | SWT.RESIZE );
 		shell.setText("Project File Restore/Replace");
 		shell.setMinimumSize(450, 250);
 		
@@ -86,37 +82,24 @@ public class ProjectBackupShell {
 		
 		doit.addSelectionListener(new SelectionAdapter() {
 			public void widgetSelected(SelectionEvent e) {
-				// Oh my god, error checking like this sucks.  I am tempted to make an
-				// "easy error dialog" static method... Imagine...
-				//   ErrorBox.open("Error: no file specified", "You must specify a file to continue");
-				// that would be so much nicer than this crappy 7 line method of doing it.
 				if( file.getText() == null || !(new File(file.getText())).exists() ) {
-					MessageBox error = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
-					error.setText("File Error");
-					error.setMessage("You must specify a file that exists.");
-					error.open();
+					DialogUtil.error(shell, "File Error", "You must specify a file that exists.");
 					return;
 				}
-				
+
 				if( symCombo.getSelectionIndex() == -1 ) {
-					MessageBox error = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
-					error.setText("Select a sym");
-					error.setMessage("You must select a sym");
-					error.open();
+					DialogUtil.error(shell, "Select a sym", "You must select a sym");
 					return;
 				}
-				
+
 				int sym = Integer.parseInt( symCombo.getItem(symCombo.getSelectionIndex()).substring(4) );
 				if( RepDevMain.SYMITAR_SESSIONS.get(sym).isConnected() ) {
-					MessageBox error = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR );
-					error.setText("Not logged out");
-					error.setMessage("You must log out of the sym that you want to restore your project file in");
-					error.open();
+					DialogUtil.error(shell, "Not logged out", "You must log out of the sym that you want to restore your project file in");
 					return;
 				}
 								
 				progress.setSelection(10);				
-				status.setText(status.getText() + "Logging in to sym " + sym + "\r\n" );				
+				status.append("Logging in to sym " + sym + "\r\n" );
 				
 				int err = SymLoginShell.symLogin(shell.getDisplay(), shell, sym);
 				if( err != -1 ) {
@@ -125,8 +108,8 @@ public class ProjectBackupShell {
 					SymitarSession session = RepDevMain.SYMITAR_SESSIONS.get(sym);
 					SymitarFile pf = new SymitarFile(sym,"repdev." + session.getUserNum(true) + "projects", FileType.REPGEN);
 
-					status.setText(status.getText() + "Replacing Project file for " + session.getUserNum(true) +
-							" on sym " + sym + "...\r\n");					
+					status.append("Replacing Project file for " + session.getUserNum(true) +
+							" on sym " + sym + "...\r\n");
 					
 					try {
 						progress.setSelection(40);
@@ -137,8 +120,7 @@ public class ProjectBackupShell {
 						progress.setSelection(50);
 						SessionError se = session.saveFile(pf, new String(data));
 						progress.setSelection(80);
-						status.setText(status.getText() 
-								+ "Finished, errors: " + se.toString() + "\r\n" );
+						status.append("Finished, errors: " + se.toString() + "\r\n" );
 						
 					} catch (FileNotFoundException e1) {
 						e1.printStackTrace();

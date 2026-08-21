@@ -33,8 +33,7 @@ import org.eclipse.swt.widgets.Text;
 public abstract class SymitarSession {
 	protected String server, aixUsername, aixPassword, userID ,userNum;
 	protected int sym, port;
-	protected ArrayList<QueueInfo> queueInfoList;
-	
+
 
 	/**
 	 * Initiates a connection to the server, if we are not already connected
@@ -135,16 +134,6 @@ public abstract class SymitarSession {
 	public interface PromptListener{
 		String getPrompt(String name);
 	}
-	/**
-	 * Returns an arraylist of QueueInfo objects
-	 * 
-	 * @return
-	 */
-	public ArrayList<QueueInfo> getQueueInfo() {
-		return queueInfoList;
-	}
-
-
 	public abstract boolean isSeqRunning(int seq);
 
 	public abstract void terminateRepgen(int seq);
@@ -234,7 +223,7 @@ public abstract class SymitarSession {
 	public ArrayList<Sequence> getReportSeqs( String reportName, int time,
 			int search, int limit){
 		ArrayList<PrintItem> items = getPrintItems("REPWRITER", search);
-		ArrayList<Sequence> newItems = new ArrayList<Sequence>();
+		ArrayList<Sequence> newItems = new ArrayList<>();
 
 		if( items == null )
 			return newItems;
@@ -289,7 +278,7 @@ public abstract class SymitarSession {
 	 */
 	public ArrayList<Sequence> getFMSeqs( String reportName, int search, int limit){
 		ArrayList<PrintItem> items = getPrintItems("MISCFMPOST", search);
-		ArrayList<Sequence> newItems = new ArrayList<Sequence>();
+		ArrayList<Sequence> newItems = new ArrayList<>();
 
 		//More than likely, if we are looking for anything, it will be the newest one first
 		Collections.reverse(items);

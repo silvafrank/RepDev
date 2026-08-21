@@ -21,9 +21,6 @@
 
 package com.repdev;
 
-//import java.awt.event.KeyAdapter;
-//import java.awt.event.KeyEvent;
-//import java.awt.event.KeyListener;
 import java.util.ArrayList;
 import java.util.Collections;
 
@@ -73,7 +70,7 @@ public class GotoSectionShell {
 	 *  An optional field for the array size is also available.
 	 */
 	public void open() {
-		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM );
+		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE );
 		//shell.setImage(RepDevMain.xxxxx);
 		
 		FormLayout layout = new FormLayout();
@@ -113,7 +110,7 @@ public class GotoSectionShell {
 		// --- Key Events ---
 		sectionList.addKeyListener(new KeyListener() {
 				public void keyReleased(KeyEvent e){
-					if(e.keyCode == 27){
+					if(e.keyCode == SWT.ESC){
 						shell.dispose();
 					}
 				}
@@ -122,7 +119,7 @@ public class GotoSectionShell {
 		
 		cancel.addKeyListener(new KeyListener() {
 				public void keyReleased(KeyEvent e){
-					if(e.keyCode == 27){
+					if(e.keyCode == SWT.ESC){
 						shell.dispose();
 					}
 				}
@@ -131,7 +128,7 @@ public class GotoSectionShell {
 		
 		ok.addKeyListener(new KeyListener() {
 				public void keyReleased(KeyEvent e){
-					if(e.keyCode == 27){
+					if(e.keyCode == SWT.ESC){
 						shell.dispose();
 					}
 				}
@@ -190,10 +187,7 @@ public class GotoSectionShell {
 
 		shell.pack();
 		shell.open();
-		while (!shell.isDisposed()) {
-			if (!shell.getDisplay().readAndDispatch())
-				shell.getDisplay().sleep();
-		}
+		DialogUtil.pumpUntilClosed(shell);
 		
 	}
 			

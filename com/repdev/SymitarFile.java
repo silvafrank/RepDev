@@ -111,13 +111,11 @@ public class SymitarFile implements Serializable {
 			}
 		else{
 			StringBuilder sb= new  StringBuilder();
-			try {
-				BufferedReader in = new BufferedReader(new FileReader(getPath()));
+			try (BufferedReader in = new BufferedReader(new FileReader(getPath()))) {
 				String line = "";
-				
+
 				while( (line=in.readLine()) != null)
 					sb.append(line + "\n");
-				in.close();
 				return sb.toString();
 			} catch (FileNotFoundException e) {
 				return null;
@@ -161,14 +159,11 @@ public class SymitarFile implements Serializable {
 				File file = new File(getPath());
 				if (file.exists() && !file.canWrite())
 					file.setWritable(true);
-				PrintWriter out = new PrintWriter(new FileWriter(getPath()));
 
-				if (data != null)
-					out.write(data);
-
-				out.close();
-				out = null;
-				file = null;
+				try (PrintWriter out = new PrintWriter(new FileWriter(getPath()))) {
+					if (data != null)
+						out.write(data);
+				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			}

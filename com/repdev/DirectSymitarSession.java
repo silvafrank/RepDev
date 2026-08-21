@@ -26,6 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.text.DecimalFormat;
@@ -56,6 +57,10 @@ import org.eclipse.swt.widgets.Text;
  *
  */
 public class DirectSymitarSession extends SymitarSession {
+	// How long to wait for the initial TCP connect before giving up. Deliberately not
+	// applied to reads after connecting, since report output can legitimately take a while.
+	private static final int CONNECT_TIMEOUT_MS = 15000;
+
 	Socket socket;
 	BufferedReader in;
 	PrintWriter out;
@@ -195,7 +200,11 @@ public class DirectSymitarSession extends SymitarSession {
 					return SessionError.SSH_KEY_CHANGED;
 				}
 			} else {
-				socket = new Socket(server, port);
+				// Bound the initial TCP handshake so an unreachable/unresponsive host fails
+				// fast instead of freezing the UI thread indefinitely (connect() is called
+				// synchronously from the login flow).
+				socket = new Socket();
+				socket.connect(new InetSocketAddress(server, port), CONNECT_TIMEOUT_MS);
 				socket.setKeepAlive(true);
 			
 				in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -531,7 +540,7 @@ public class DirectSymitarSession extends SymitarSession {
 	
 	private static class Command {
 		String command = "";
-		HashMap<String, String> parameters = new HashMap<String, String>();
+		HashMap<String, String> parameters = new HashMap<>();
 		String data = "";
 		static Pattern commandPattern = Pattern.compile("(.*?)~.*");
 		static int currentMessageId = 10000;
@@ -653,53 +662,87 @@ public class DirectSymitarSession extends SymitarSession {
 	}
 
 	private String readUntil(String... strs) throws IOException {
-		String buf = "";
+		// StringBuilder instead of String += : the old code reallocated and copied the whole
+		// buffer on every single byte read, which is O(n^2) over a response and noticeably
+		// slow for large output (e.g. pulling full RepGen source or big report results).
+		StringBuilder buf = new StringBuilder();
 		if(bFullTrace){
 			try {
 				while (true) {
 					int cur = in.read();
 					trace.write((byte)cur);
 					trace.flush();
-					
+
 					//System.out.print((char)cur);
-					buf += (char) cur;
+					buf.append((char) cur);
 					for (String str : strs)
 						if (buf.indexOf(str) != -1)
-							return buf;
+							return buf.toString();
 				}
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
-				return buf;
+				return buf.toString();
 			}
 		} else{
 			while (true) {
 				int cur = in.read();
 				//System.out.print((char)cur);
-				buf += (char) cur;
+				buf.append((char) cur);
 				for (String str : strs)
 					if (buf.indexOf(str) != -1)
-						return buf;
+						return buf.toString();
 			}
 		}
 	}
 
 	@Override
 	public SessionError disconnect() {
+		// Close each resource independently so a failure closing one (e.g. an already-broken
+		// socket) doesn't skip cleanup of the rest - previously a single try/catch around all
+		// of these meant one exception could leak everything after it, including the SSH
+		// process's stderr reader, which was never closed at all.
+		boolean hadError = false;
+
+		if( keepAlive != null)
+			keepAlive.interrupt();
+
 		try {
-			if( keepAlive != null)
-				keepAlive.interrupt();
-			
 			if( in != null)
 				in.close();
-			
+		} catch (Exception e) {
+			hadError = true;
+		}
+
+		try {
 			if( out != null)
 				out.close();
-			
+		} catch (Exception e) {
+			hadError = true;
+		}
+
+		try {
+			if( err != null)
+				err.close();
+		} catch (Exception e) {
+			hadError = true;
+		}
+
+		try {
 			if( socket != null)
 				socket.close();
-			if( useSSH )
+		} catch (Exception e) {
+			hadError = true;
+		}
+
+		try {
+			if( useSSH && p != null)
 				p.destroy();
+		} catch (Exception e) {
+			hadError = true;
+		}
+
+		try {
 			if( trace != null){
 				System.out.println("Closing Full Trace");
 				trace.flush();
@@ -707,11 +750,12 @@ public class DirectSymitarSession extends SymitarSession {
 				bFullTrace = false;
 			}
 		} catch (Exception e) {
-			return SessionError.IO_ERROR;
+			hadError = true;
 		}
+
 		connected = false;
 		loggedInAIX = false;
-		return SessionError.NONE;
+		return hadError ? SessionError.IO_ERROR : SessionError.NONE;
 	}
 
 	private synchronized void wakeUp(){
@@ -793,18 +837,6 @@ public class DirectSymitarSession extends SymitarSession {
 	
 	@Override
 	public synchronized String getFile(SymitarFile file) {
-/*		if(RepDevMain.useSourceSafe && !file.isLocal() && file instanceof SymitarFile && file.getType()==FileType.REPGEN) {
-			log("Source Control");
-			SourceControl sc = new SourceControl();
-			
-			return sc.getFile(file);
-		}else {
-			log("Not Source Control");
-			return getSymitarFile(file);
-		}
-	}
-
-	public synchronized String getSymitarFile(SymitarFile file) {*/
 		StringBuilder data = new StringBuilder();
 		final long maxSize = 2097152; //Don't download more than 2MB, otherwise things get ugly
 		boolean wroteSizeWarning = false;
@@ -865,7 +897,7 @@ public class DirectSymitarSession extends SymitarSession {
 
 	@Override
 	public synchronized ArrayList<SymitarFile> getFileList(FileType type, String search) {
-		ArrayList<SymitarFile> toRet = new ArrayList<SymitarFile>();
+		ArrayList<SymitarFile> toRet = new ArrayList<>();
 		Command current;
 		setLastActivity();
 		if( !connected )
@@ -1695,7 +1727,7 @@ public class DirectSymitarSession extends SymitarSession {
 
 	@Override
 	public synchronized ArrayList<PrintItem> getPrintItems(String query, int limit) {
-		ArrayList<PrintItem> items = new ArrayList<PrintItem>();
+		ArrayList<PrintItem> items = new ArrayList<>();
 		Command cur;
 		
 		if( !connected )
@@ -1738,7 +1770,7 @@ public class DirectSymitarSession extends SymitarSession {
 
 	@Override
 	public synchronized ArrayList<PrintItem> getPrintItems(Sequence seq) {
-		ArrayList<PrintItem> items = new ArrayList<PrintItem>();
+		ArrayList<PrintItem> items = new ArrayList<>();
 		
 		Command cur;
 		

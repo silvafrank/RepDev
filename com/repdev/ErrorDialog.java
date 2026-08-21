@@ -75,10 +75,7 @@ public class ErrorDialog {
 		shell.pack();
 		shell.open();
 
-		while (!shell.isDisposed()) {
-			if (!Display.getCurrent().readAndDispatch())
-				Display.getCurrent().sleep();
-		}
+		DialogUtil.pumpUntilClosed(shell);
 	}
 
 	/**
@@ -88,7 +85,7 @@ public class ErrorDialog {
 	private void createShell() {
 		final Clipboard cb = new Clipboard(Display.getCurrent());
 		
-		shell = new Shell(Display.getCurrent(), SWT.CLOSE | SWT.TITLE | SWT.BORDER | SWT.APPLICATION_MODAL);
+		shell = new Shell(Display.getCurrent(), SWT.CLOSE | SWT.TITLE | SWT.BORDER | SWT.APPLICATION_MODAL | SWT.RESIZE);
 		shell.setText("RepDev - Error");
 	
 		FormLayout layout = new FormLayout();
@@ -143,9 +140,6 @@ public class ErrorDialog {
 			public void widgetSelected(SelectionEvent e) {
 				TextTransfer textTransfer = TextTransfer.getInstance();
 				cb.setContents(new Object[]{errorReportText.getText()}, new Transfer[]{textTransfer});
-				
-				//shell.close();
-				//shell.dispose();
 			}
 		});
 
@@ -157,18 +151,19 @@ public class ErrorDialog {
 	 * @return text
 	 */
 	private String getErrorReportText() {
-		String toRet = "RepDev: " + RepDevMain.VERSION + "\n\n";
+		StringBuilder toRet = new StringBuilder();
+		toRet.append("RepDev: ").append(RepDevMain.VERSION).append("\n\n");
 
-		toRet += "Error Text: " + exception.getMessage() + " - " + exception.getClass().getName() + "\n";
-		toRet += new Date().toString() + "\n\n";
+		toRet.append("Error Text: ").append(exception.getMessage()).append(" - ").append(exception.getClass().getName()).append("\n");
+		toRet.append(new Date().toString()).append("\n\n");
 
 		for (StackTraceElement element : exception.getStackTrace()) {
-			toRet += element.toString() + "\n";
+			toRet.append(element.toString()).append("\n");
 		}
 
-		toRet += "\nUser Notes: \n" + customText.getText() + "\n\n";
+		toRet.append("\nUser Notes: \n").append(customText.getText()).append("\n\n");
 
-		return toRet;
+		return toRet.toString();
 	}
 
 	/**

@@ -56,7 +56,7 @@ public class RemProjShell {
 		layout.marginRight = 5;
 		layout.spacing = 5;
 
-		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM);
+		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE);
 		shell.setText("Remove Project");
 		shell.setLayout(layout);
 
@@ -143,10 +143,7 @@ public class RemProjShell {
 	public static Result confirm(Display display, Shell parent, Project project) {
 		me.create(parent, project);
 
-		while (!me.shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(me.shell);
 
 		return me.result;
 	}

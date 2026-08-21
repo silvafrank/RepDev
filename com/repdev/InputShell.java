@@ -33,15 +33,12 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 
-// no longer supported in modern java versions, Boolean is provide by jdk
-// import com.sun.org.apache.xpath.internal.operations.Bool;
-
 public class InputShell {
 	private static InputShell me = new InputShell();
 	private Shell shell;
 	private String result;
 	private String defaultValue = "";
-	private String title, prompt, defValue;
+	private String title, prompt;
 	private boolean isPassword;
 
 	private InputShell() {
@@ -55,7 +52,7 @@ public class InputShell {
 		layout.marginRight = 5;
 		layout.spacing = 5;
 
-		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM);
+		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE);
 		shell.setText(title);
 		shell.setLayout(layout);
 
@@ -128,10 +125,7 @@ public class InputShell {
 
 		Display display = me.shell.getDisplay();
 		
-		while (!me.shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(me.shell);
 
 		return me.result;
 	}

@@ -24,16 +24,9 @@ import org.xml.sax.SAXException;
 
 
 public class Style {
-    public String name, version, description, author; 
+    public String name, version, description, author;
 
     private Element style;
-
-    public static void main(String[] args) {
-	//Style me = new Style( new File("styles\\default.xml") );
-	//System.out.println(me.getColor("comments", "fgColor").toString());
-    	//System.out.println(SWT.GREY);
-    }
-
 
     public Style(File xmlFile) {
 	DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -85,32 +78,31 @@ public class Style {
 
     		return Integer.parseInt(fontSize);
     }
-    public String getValue(String item, String attrib)
-    {
+    /**
+     * Shared lookup used by getValue/getColor/getStyle: finds the child node named
+     * {@code item} and returns the value of its {@code attrib} attribute, or "" if
+     * no such item/attribute pair exists.
+     */
+    private String findAttribute(String item, String attrib) {
+    	String value = "";
     	for( int i=0; i<style.getChildNodes().getLength(); i++ ) {
     	    Node cur = style.getChildNodes().item(i);
     	    if( cur.getNodeName().equals(item) ) {
     		for( int j=0; j<cur.getAttributes().getLength(); j++ ) {
     		    if( cur.getAttributes().item(j).getNodeName().equals(attrib) ) {
-    			return cur.getAttributes().item(j).getNodeValue();
-    		    }	    
+    			value = cur.getAttributes().item(j).getNodeValue();
+    		    }
     		}
     	    }
     	}
-    	return "";
+    	return value;
+    }
+    public String getValue(String item, String attrib)
+    {
+    	return findAttribute(item, attrib);
     }
     public RGB getColor(String item, String attrib) {
-	String hexColor = "";
-	for( int i=0; i<style.getChildNodes().getLength(); i++ ) {
-	    Node cur = style.getChildNodes().item(i);
-	    if( cur.getNodeName().equals(item) ) {
-		for( int j=0; j<cur.getAttributes().getLength(); j++ ) {
-		    if( cur.getAttributes().item(j).getNodeName().equals(attrib) ) {
-			hexColor = cur.getAttributes().item(j).getNodeValue();
-		    }	    
-		}
-	    }
-	}
+	String hexColor = findAttribute(item, attrib);
 	int[] rgb = {0,0,0};
 	if( hexColor.equals("") ) return null; 
 	if( hexColor.indexOf("#") == 0 ) hexColor = hexColor.substring(1);
@@ -166,17 +158,7 @@ public class Style {
 
     public int getStyle(String item){
 	int swtStyle = SWT.DEFAULT;
-	String styleText = "";
-	for( int i=0; i<style.getChildNodes().getLength(); i++ ) {
-	    Node cur = style.getChildNodes().item(i);
-	    if( cur.getNodeName().equals(item) ) {
-		for( int j=0; j<cur.getAttributes().getLength(); j++ ) {
-		    if( cur.getAttributes().item(j).getNodeName().equals("style") ) {
-			styleText = cur.getAttributes().item(j).getNodeValue();
-		    }	    
-		}
-	    }
-	}
+	String styleText = findAttribute(item, "style");
 	if( styleText.equalsIgnoreCase("bold") ) swtStyle = SWT.BOLD;
 	if( styleText.equalsIgnoreCase("italic") ) swtStyle = SWT.ITALIC;
 	return swtStyle;

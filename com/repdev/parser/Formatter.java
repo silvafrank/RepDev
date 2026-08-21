@@ -1,6 +1,7 @@
 package com.repdev.parser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import com.repdev.EditorComposite;
 
@@ -35,16 +36,7 @@ public class Formatter {
 	}
 	
 	private int contains(String[] list, String str){
-		int i = 0;
-		
-		for( String test : list){
-			if( test.equals(str))
-				return i;
-			
-			i++;
-		}
-		
-		return -1;
+		return Arrays.asList(list).indexOf(str);
 	}
 	
 	private boolean processBeforeAndAfter(StringBuilder str, Token cur, String indent){

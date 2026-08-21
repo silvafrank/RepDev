@@ -33,7 +33,6 @@ import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
-import org.eclipse.swt.widgets.MessageBox;
 import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Spinner;
@@ -59,7 +58,7 @@ public class RunReportShell {
 	}
 	
 	private void create(){
-		shell = new Shell(parent, SWT.TITLE | SWT.MIN | SWT.CLOSE );
+		shell = new Shell(parent, SWT.TITLE | SWT.MIN | SWT.CLOSE | SWT.RESIZE );
 		shell.setText("Run Report");
 		shell.setImage(RepDevMain.smallRunImage);
 		shell.addDisposeListener(new DisposeListener(){
@@ -310,7 +309,7 @@ public class RunReportShell {
 								shell.setActive();
 								
 								for( Sequence seq : RepDevMain.SYMITAR_SESSIONS.get(sym).getReportSeqs(file.getName(), time, 10,1) ){
-									ioText.setText(ioText.getText()+"\nOutput Sequence: " + seq);
+									ioText.append("\nOutput Sequence: " + seq);
 									RepDevMain.mainShell.openFile(seq, sym);
 								}
 								

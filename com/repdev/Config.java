@@ -35,8 +35,8 @@ public class Config implements Serializable {
 	private static Config me = new Config();
 	private static final long serialVersionUID = 1L;
 	
-	private ArrayList<Integer> syms = new ArrayList<Integer>();
-	private HashMap<Integer, SessionInfo> sessionInfo = new HashMap<Integer, SessionInfo>();
+	private ArrayList<Integer> syms = new ArrayList<>();
+	private HashMap<Integer, SessionInfo> sessionInfo = new HashMap<>();
 	private String server = "127.0.0.1";
 	private int port = 23;
 	private int tabSize = 0; // 0 = Regular tab
@@ -82,8 +82,8 @@ public class Config implements Serializable {
 	@SuppressWarnings("unused")
 	private int maxQueues = 3; //The largest value this slider goes up to, We should probably scrap this since the max value is 9999 and the error checking code is good enough now that it can detect what needs to be entered. In real life, this can also be non continous large ranges, which complicates things.
 							//UPDATE: Ok, this has been removed, however, you can't remove items from Serialized classes.
-    private ArrayList<SymitarFile> recentFiles = new ArrayList<SymitarFile>();
-    private ArrayList<String> mountedDirs = new ArrayList<String>();
+    private ArrayList<SymitarFile> recentFiles = new ArrayList<>();
+    private ArrayList<String> mountedDirs = new ArrayList<>();
     
 	private Config() {
 	}
@@ -117,11 +117,7 @@ public class Config implements Serializable {
 	}
 	
 	public static boolean useSSO() {
-		if (getPasswordValidator().equals("")) {
-			return false;
-		} else {
-			return true;
-		}
+		return !getPasswordValidator().equals("");
 	}
  
 	public static String getLastPassword() {
@@ -162,10 +158,10 @@ public class Config implements Serializable {
 		 * Note, this is where we should set any init stuff to un-null any objects
 		 */
 		if( me.recentFiles == null) 
-			me.recentFiles = new ArrayList<SymitarFile>();
+			me.recentFiles = new ArrayList<>();
 		
 		if( me.mountedDirs == null) 
-			me.mountedDirs = new ArrayList<String>();
+			me.mountedDirs = new ArrayList<>();
 		
 		if( me.port == 0 )
 			me.port = 23; // default to 23 if 0 or unset.

@@ -22,6 +22,7 @@
 package com.repdev.parser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * This is a background parser that will generate a list of all the sections and procedures,
@@ -180,10 +181,6 @@ public class BackgroundSectionParser{
 			}
 			
 			if(isSectionHead(tok.getStr()) && !tok.inDate() && !tok.inString() && tok.getCDepth() == 0){
-				if(false && curDepth != 1){
-					System.out.println("Mismatched Heads and Tails found while parsing "+si.getTitle()+" Section");
-					System.out.println(tok.getStr()+":"+curDepth);
-				}
 				curDepth=1;
 				// Defensive bounds checks: this thread reads tokens against a
 				// text snapshot, but Token offsets can briefly disagree with
@@ -233,16 +230,7 @@ public class BackgroundSectionParser{
 	 * @return <B>boolean</B> true/false
 	 */
 	private boolean isSectionHead(String sStr){
-		boolean bIsSection = false;
-
-		for(String sh:sectionHead){
-			if(sStr.equals(sh)){
-				bIsSection = true;
-				break;
-			}
-		}
-		
-		return bIsSection;
+		return Arrays.asList(sectionHead).contains(sStr);
 	}
 	
 	

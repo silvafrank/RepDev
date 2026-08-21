@@ -80,10 +80,7 @@ public class SourceControl {
 					}
 				} else {
 					// repository Directory does not exist
-					MessageBox dialog = new MessageBox(RepDevMain.mainShell.shell, SWT.ICON_ERROR | SWT.OK);
-					dialog.setText("Source Control");
-					dialog.setMessage("Repository Directory is not accessible;  "+sourceControlDir+". RepGens will not be sync'd.");
-					dialog.open();
+					DialogUtil.error(RepDevMain.mainShell.shell, "Source Control", "Repository Directory is not accessible;  "+sourceControlDir+". RepGens will not be sync'd.");
 				}
 			} else {
 				// Not using Source Control, return the file

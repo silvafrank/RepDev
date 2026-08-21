@@ -27,13 +27,13 @@ public class Variable implements Comparable {
 	
 	public Variable(Variable old){
 		if( old.name != null)
-			this.name = new String(old.name);
-		
+			this.name = old.name;
+
 		if( old.filename != null)
-			this.filename = new String(old.filename);
-		
+			this.filename = old.filename;
+
 		if( old.type != null)
-			this.type = new String(old.type);
+			this.type = old.type;
 		
 		this.constant = old.constant;
 		this.pos = old.pos;	

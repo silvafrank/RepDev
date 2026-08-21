@@ -17,11 +17,9 @@ import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
-import org.eclipse.swt.layout.RowLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.List;
@@ -61,15 +59,11 @@ public class OptionsShell {
 		me.create(parent);		
 		me.shell.open();
 		
-		Display display = me.shell.getDisplay();		
-		while (!me.shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(me.shell);
 	}
 	
 	private void create(Shell parent) {
-		shell = new Shell(parent, SWT.CLOSE | SWT.TITLE | SWT.APPLICATION_MODAL );
+		shell = new Shell(parent, SWT.CLOSE | SWT.TITLE | SWT.APPLICATION_MODAL | SWT.RESIZE );
 		shell.setText("Settings");
 		shell.setImage(RepDevMain.smallOptionsImage);
 		shell.setMinimumSize(400, 300);	
@@ -117,12 +111,8 @@ public class OptionsShell {
 					Config.setPasswordValidator(ssoPass);
 				}
 
-				/*if (testRadio.getSelection())
-					Config.setServer("test");
-				else {*/
-					Config.setServer(serverText.getText());
-					Config.setPort(Integer.parseInt(portText.getText()));
-				//}
+				Config.setServer(serverText.getText());
+				Config.setPort(Integer.parseInt(portText.getText()));
 
 				if( RepDevMain.DEVELOPER )
 					RepDevMain.FORGET_PASS_ON_EXIT = devForgetBox.getSelection();
@@ -222,10 +212,6 @@ public class OptionsShell {
 						ssoPass = password;
 						RepDevMain.MASTER_PASSWORD_HASH = RepDev_SSO.md5Hash(ssoPass);
 						Config.setPasswordValidator(ssoPass);
-						//MessageBox dialog = new MessageBox(shell, SWT.OK | SWT.ICON_INFORMATION);
-						//dialog.setText("Settings");
-						//dialog.setMessage("Please click \"Save Settings\".  Exit and relaunch RepDev to log in.");
-						//dialog.open();
 					}
 				}
 				else{
@@ -423,7 +409,7 @@ public class OptionsShell {
 		styleLabel.setText("Style (requires restart)");
 		
 		styleCombo = new Combo(editorGroup, SWT.DROP_DOWN | SWT.READ_ONLY);
-		File dir = new File("styles\\");
+		File dir = new File("styles");
 		if( dir.isDirectory() ) {
 		    for( String file: dir.list() ) {
 			if( file.endsWith(".xml") ) styleCombo.add(file.substring(0, file.length()-4));
@@ -947,10 +933,7 @@ public class OptionsShell {
 		
 		if(!isMatch){
 			if(msg.length()!=0) {
-				MessageBox dialog = new MessageBox(shell, SWT.ICON_ERROR | SWT.OK);
-				dialog.setMessage(msg);
-				dialog.setText("Input Error");
-				dialog.open();
+				DialogUtil.error(shell, "Input Error", msg);
 			}
 			
 			return false;

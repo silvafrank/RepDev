@@ -103,7 +103,7 @@ public class Snippet {
 	//Called to clean up some of the snippet text, requires the variables to be loaded already
 	private void cleanup(){
 		StringBuilder ret = new StringBuilder();
-		String snippet = new String(this.snippet);
+		String snippet = this.snippet;
 		
 		snippet = snippet.replace("$end$", "");
 		
@@ -221,7 +221,7 @@ public class Snippet {
 	}
 	
 	public SnippetVariable getVar(int varPos){
-		String temp = new String(snippet);
+		String temp = snippet;
 		ArrayList<String> seenVars = new ArrayList<String>();
 		String var;
 		int count = 0;
@@ -261,7 +261,7 @@ public class Snippet {
 	 * @return
 	 */
 	public int getNumberOfUniqueVars(){
-		String temp = new String(snippet);
+		String temp = snippet;
 		ArrayList<String> seenVars = new ArrayList<String>();
 		String var;
 		int count = 0;

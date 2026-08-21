@@ -56,7 +56,7 @@ public class RemFileShell {
 		layout.marginRight = 5;
 		layout.spacing = 5;
 
-		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM);
+		shell = new Shell(parent, SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE);
 		shell.setText("Remove File");
 		shell.setLayout(layout);
 
@@ -160,10 +160,7 @@ public class RemFileShell {
 	public static int confirm(Display display, Shell parent, Project proj, SymitarFile file) {
 		me.create(parent, proj, file);
 
-		while (!me.shell.isDisposed()) {
-			if (!display.readAndDispatch())
-				display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(me.shell);
 
 		return me.result;
 	}

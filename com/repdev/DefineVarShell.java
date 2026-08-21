@@ -21,9 +21,6 @@
 
 package com.repdev;
 
-//import java.awt.event.KeyAdapter;
-//import java.awt.event.KeyEvent;
-//import java.awt.event.KeyListener;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
@@ -38,9 +35,7 @@ import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Combo;
-import org.eclipse.swt.widgets.MessageBox;
 
-import com.repdev.parser.RepgenParser;
  
 /**
  *  DefineVarShell will display a GUI for the user to select the variable type.
@@ -70,7 +65,7 @@ public class DefineVarShell {
 	 *  An optional field for the array size is also available.
 	 */
 	public void open() {
-		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM );
+		shell = new Shell(SWT.APPLICATION_MODAL | SWT.DIALOG_TRIM | SWT.RESIZE );
 		shell.setImage(RepDevMain.smallDefineVarImage);
 		
 		// Open the GUI only if a single word is passed in.
@@ -145,7 +140,7 @@ public class DefineVarShell {
 						arraySize.getText(), commentText.getText());
 					previewText.setText(sTmpStr+" ");
 					shell.pack(true);
-					if(e.keyCode == 27){
+					if(e.keyCode == SWT.ESC){
 						shell.dispose();
 					}
 				}
@@ -157,7 +152,7 @@ public class DefineVarShell {
 						arraySize.getText(), commentText.getText());
 					previewText.setText(sTmpStr+" ");
 					shell.pack(true);
-					if(e.keyCode == 27){
+					if(e.keyCode == SWT.ESC){
 						shell.dispose();
 					}
 				}
@@ -169,7 +164,7 @@ public class DefineVarShell {
 						arraySize.getText(), commentText.getText());
 					previewText.setText(sTmpStr+" ");
 					shell.pack(true);
-					if(e.keyCode == 27){
+					if(e.keyCode == SWT.ESC){
 						shell.dispose();
 					}
 				}
@@ -178,7 +173,7 @@ public class DefineVarShell {
 			
 			varType.addKeyListener(new KeyListener() {
 				public void keyReleased(KeyEvent e){
-					if(e.keyCode == 27){
+					if(e.keyCode == SWT.ESC){
 						shell.dispose();
 					}
 				}
@@ -224,11 +219,7 @@ public class DefineVarShell {
 							}
 						}
 					}
-					// Validate numeric characters for arraySize.
-					/*else if(arraySize.getText().length()!=0 && !ec.isNum(arraySize.getText())){
-						messageBox("Invalid Array Size.  Please enter numbers only.");
-					}*/
-					if(valueError == false){
+					if(!valueError){
 						ec.defineVariable(sTmpStr);
 						shell.dispose();
 					}
@@ -354,10 +345,7 @@ public class DefineVarShell {
 				previewText.setText(sTmpStr+" ");
 			shell.pack();
 			shell.open();
-			while (!shell.isDisposed()) {
-				if (!shell.getDisplay().readAndDispatch())
-					shell.getDisplay().sleep();
-			}
+			DialogUtil.pumpUntilClosed(shell);
 		}
 		else{
 			messageBox("Multiple words were selected.  Variable not defined.");
@@ -365,10 +353,7 @@ public class DefineVarShell {
 	}
 	
 	private void messageBox(String msg){
-		MessageBox dialog = new MessageBox(shell, SWT.ICON_ERROR | SWT.OK);
-		dialog.setMessage(msg);
-		dialog.setText("Define Variable - Error");
-		dialog.open();
+		DialogUtil.error(shell, "Define Variable - Error", msg);
 	}
 	
 	private void formulateString(String varName, String varType, String charLength, String arraySize, String commentText){

@@ -83,7 +83,7 @@ public class Util {
 	}
 	
 	public static ArrayList<SymitarFile> getFileList(String dir, String search) {
-		ArrayList<SymitarFile> data = new ArrayList<SymitarFile>();
+		ArrayList<SymitarFile> data = new ArrayList<>();
 
 		File file = new File(dir);
 		File[] fileListData;

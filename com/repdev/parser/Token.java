@@ -20,6 +20,7 @@
 package com.repdev.parser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import org.eclipse.swt.graphics.Color;
 
@@ -30,7 +31,7 @@ public class Token {
 	private String str;
 	private Token after = null, before = null;
 	private int pos, commentDepth, afterDepth;
-	private boolean inString, afterString, inDate, afterDate, inDefs, inComment;
+	private boolean inString, afterString, inDate, afterDate, inDefs;
 
 	private static final String[] heads = { "setup", "print title", "select", "define", "do", "total", "headers", ":(", "(", "\"", "'", "[", "procedure", "sort" };
 	private static final String[] ends = {"end", ")", "\"", "'", "]"};
@@ -71,7 +72,7 @@ public class Token {
 		if( old == null)
 		  return;
 		
-		this.str = new String(old.str);
+		this.str = old.str;
 		this.pos = old.pos;
 		this.commentDepth = old.commentDepth;
 		this.afterDepth = old.afterDepth;
@@ -241,19 +242,6 @@ public class Token {
 		return false;
 	}
 
-	//TODO: Cannot make a reference to the non-static method.  By making getLvars() static, fubars the variable parser.
-	/*
-	public boolean isVar(String str) {
-		for (int i = 0; i < RepgenParser.getLvars().size(); i++){
-			Variable var = RepgenParser.getLvars().get(i);
-
-			if (var.getName().equals(str))
-				return true;
-		}
-
-		return false;
-	}
-*/
 	public boolean dbRecordValid() {
 		return DatabaseLayout.getInstance().containsRecordName(str);
 	}
@@ -271,21 +259,11 @@ public class Token {
 	}
 	
 	public boolean isHead() {
-		for( String head: heads ) {
-			if( this.getStr().equals(head) )
-				return true;
-		}
-		
-		return false;		
+		return Arrays.asList(heads).contains(this.getStr());
 	}
-	
+
 	public boolean isEnd() {
-		for( String end: ends ) {
-			if( this.getStr().equals(end) )
-				return true;
-		}
-		
-		return false;		
+		return Arrays.asList(ends).contains(this.getStr());
 	}
 	
 	//The "real" methods also know about tokens that can be either the start or end of a block, like quotes
@@ -325,13 +303,5 @@ public class Token {
 
 	public TokenType getTokenType() {
 		return tokenType;
-	}
-
-	private void setInComment(boolean inComment) {
-		this.inComment = inComment;
-	}
-
-	private boolean isInComment() {
-		return inComment;
 	}
 }

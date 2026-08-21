@@ -13,7 +13,7 @@ public class SnippetVariable{
 			value = id;
 		
 		this.value = value;
-		this.defaultValue = new String(value);
+		this.defaultValue = value;
 	}
 
 	public String getId() {
@@ -25,7 +25,7 @@ public class SnippetVariable{
 	}
 
 	public void reset(){
-		value = new String(defaultValue);
+		value = defaultValue;
 		setEdited(false);
 	}
 

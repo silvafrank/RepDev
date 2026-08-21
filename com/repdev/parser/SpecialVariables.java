@@ -39,8 +39,7 @@ public class SpecialVariables {
 		Matcher varMatcher;
 		
 		
-		try {
-			BufferedReader br = new BufferedReader(new FileReader(new File("vars.txt")));
+		try (BufferedReader br = new BufferedReader(new FileReader(new File("vars.txt")))) {
 			String line;
 
 			while ((line = br.readLine()) != null) {
@@ -55,9 +54,8 @@ public class SpecialVariables {
 					}
 				}
 			}
-
-			br.close();
 		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 	

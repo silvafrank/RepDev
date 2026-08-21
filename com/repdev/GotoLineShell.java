@@ -27,23 +27,19 @@ import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
 
 public class GotoLineShell {
 	private Shell shell;
-	private Display display;
 	private StyledText txt;
 	private static GotoLineShell me = new GotoLineShell();
-	
+
 	private void create(Shell parent, StyledText txt) {
-		display = parent.getDisplay();
-		
 		this.txt = txt;
 		
-		shell = new Shell( parent, SWT.APPLICATION_MODAL | SWT.CLOSE | SWT.TITLE );
+		shell = new Shell( parent, SWT.APPLICATION_MODAL | SWT.CLOSE | SWT.TITLE | SWT.RESIZE );
 		shell.setText("Goto Line");
 		
 		FormLayout layout = new FormLayout();
@@ -101,10 +97,7 @@ public class GotoLineShell {
 	public static void show(Shell parent, StyledText txt) {
 		me.create(parent,txt);
 		
-		while (!me.shell.isDisposed()) {
-			if (!me.display.readAndDispatch())
-				me.display.sleep();
-		}
+		DialogUtil.pumpUntilClosed(me.shell);
 	}
 	
 	private void setLine(int ln) {

@@ -25,8 +25,7 @@ public class KeywordLayout {
 		Pattern wordPattern = Pattern.compile("(.*)\\|(.*)\\|(.*)");
 		Matcher wordMatcher;
 		
-		try {
-			BufferedReader br = new BufferedReader(new FileReader(new File("keywords.txt")));
+		try (BufferedReader br = new BufferedReader(new FileReader(new File("keywords.txt")))) {
 			String line;
 			
 			while ((line = br.readLine()) != null) {
@@ -48,8 +47,6 @@ public class KeywordLayout {
 		
 			}
 
-			br.close();
-			
 			//Sort all alphabeticall right now
 			keywordList = new ArrayList<Keyword>(keywordMap.values());
 			Collections.sort(keywordList, new Comparator<Keyword>(){
@@ -59,9 +56,10 @@ public class KeywordLayout {
 			});
 			
 		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
-	
+
 	public ArrayList<Keyword> getList(){
 		return keywordList;
 	}

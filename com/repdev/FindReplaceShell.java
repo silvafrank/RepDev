@@ -92,7 +92,7 @@ public class FindReplaceShell {
 
 		FormData data;
 
-		shell = new Shell(parent, SWT.DIALOG_TRIM );
+		shell = new Shell(parent, SWT.DIALOG_TRIM | SWT.RESIZE );
 		shell.setText("Find/Replace");
 		shell.setImage(RepDevMain.smallFindReplaceImage);
 		shell.setLayout(layout);

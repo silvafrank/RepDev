@@ -27,9 +27,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Stack;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -111,7 +109,6 @@ import org.eclipse.swt.widgets.ToolItem;
 import org.eclipse.swt.widgets.Tree;
 import org.eclipse.swt.widgets.TreeItem;
 import org.w3c.dom.Document;
-import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -138,16 +135,13 @@ public class MainShell {
 	private static final int MIN_COL_WIDTH = 75, MIN_COMP_SIZE = 65;
 	private CTabFolder mainfolder;
 	private Display display;
-	//private Shell shell;
 	private Tree tree;
 	private Table tblErrors, tblTasks;
 	private FindReplaceShell findReplaceShell;
-	private SurroundWithShell surroundWithShell;
 	private final int MAX_RECENTS = 5;
-	private ArrayList<CTabItem> tabHistory = new ArrayList<CTabItem>();
+	private ArrayList<CTabItem> tabHistory = new ArrayList<>();
 	private static final int TAB_HISTORY_LIMIT = 100;
 
-	//private ArrayList<EditorComposite> EditorCompositeList = new ArrayList<EditorComposite>();
 	// CoolBar for our universal tool bar at the top.
 	private CoolBar coolBar;
 	private ToolBar editorBar;
@@ -221,7 +215,7 @@ public class MainShell {
 		cBarData.right = new FormAttachment(100);
 		coolBar.setLayoutData(cBarData);
 
-		coolItems = new ArrayList<CoolItem>();
+		coolItems = new ArrayList<>();
 		coolBar.addListener(SWT.Resize, new Listener() {
 			public void handleEvent(Event event) {
 				shell.layout();
@@ -288,33 +282,16 @@ public class MainShell {
 
 		left.addControlListener(new ControlAdapter() {
 			public void controlResized(ControlEvent e) {
-//				if (left.getSize().x < MIN_COMP_SIZE) {
-//					frmSashVert.left = new FormAttachment(0, MIN_COMP_SIZE);
-//					shell.layout();
-//				}
 			}
 		});
 
 		bottom.addControlListener(new ControlAdapter() {
 			public void controlResized(ControlEvent e) {
-//				if (bottom.getSize().y < MIN_COMP_SIZE) {
-//					if( right.getSize().y - MIN_COMP_SIZE >= 0 ){
-//						frmSashHoriz.top = new FormAttachment(right.getSize().y - MIN_COMP_SIZE, right.getSize().y, 0);
-//						right.layout();
-//					}
-//				}
 			}
 		});
 
 		sashVert.addListener(SWT.Selection, new Listener() {
 			public void handleEvent(Event e) {
-//
-//				if (e.x < MIN_COMP_SIZE)
-//					e.x = MIN_COMP_SIZE;
-//
-//				if (shell.getClientArea().width - e.x < MIN_COMP_SIZE)
-//					e.x = shell.getClientArea().width - MIN_COMP_SIZE;
-
 				if (e.x != sashVert.getBounds().x) {
 					frmSashVert.left = new FormAttachment(0, e.x);
 					shell.layout();
@@ -323,45 +300,8 @@ public class MainShell {
 			}
 		});
 
-//		sashVert.addListener(SWT.MouseEnter, new Listener() {
-//			public void handleEvent(Event e) {
-//
-//				if (e.x < MIN_COMP_SIZE)
-//					e.x = MIN_COMP_SIZE;
-//
-//				if (shell.getClientArea().width - e.x < MIN_COMP_SIZE)
-//					e.x = shell.getClientArea().width - MIN_COMP_SIZE;
-//
-//				if (e.x != sashVert.getBounds().x) {
-//					frmSashVert.left = new FormAttachment(0, e.x);
-//					shell.layout();
-//				}
-//				//Config.setSashVSize(e.x);
-//			}
-//		});
-		
-//		sashVert.addListener(SWT.MouseExit, new Listener() {
-//			public void handleEvent(Event e) {
-//
-//				e.x = 0;
-//				e.x = shell.getClientArea().width;
-//
-//				if (e.x != sashVert.getBounds().x) {
-//					frmSashVert.left = new FormAttachment(0, e.x);
-//					shell.layout();
-//				}
-//				//Config.setSashVSize(e.x);
-//			}
-//		});
-		
 		sashHoriz.addListener(SWT.Selection, new Listener() {
 			public void handleEvent(Event e) {
-//				if (e.y < MIN_COMP_SIZE)
-//					e.y = MIN_COMP_SIZE;
-//
-//				if (right.getSize().y - e.y < MIN_COMP_SIZE)
-//					e.y = right.getSize().y - MIN_COMP_SIZE;
-
 				if (e.y != sashHoriz.getBounds().y) {
 					frmSashHoriz.top = new FormAttachment(e.y, right.getSize().y, 0);
 					right.layout();
@@ -481,10 +421,7 @@ public class MainShell {
 				return null;
 			} else {
 				if (item.isDisposed()) {
-					MessageBox dialog = new MessageBox(shell, SWT.ICON_ERROR | SWT.OK);
-					dialog.setMessage("There has been an error loading this file, the filename is probably too long");
-					dialog.setText("Error");
-					dialog.open();
+					DialogUtil.error(shell, "Error", "There has been an error loading this file, the filename is probably too long");
 
 					return null;
 				}
@@ -664,10 +601,7 @@ public class MainShell {
 			dir = (String) cur.getData();
 
 		if( dir == null && sym != -1 && !RepDevMain.SYMITAR_SESSIONS.get(sym).isConnected() ) {
-			MessageBox err = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR );
-			err.setText("Can not create project");
-			err.setMessage("Unable to create project when not connected to a sym");
-			err.open();
+			DialogUtil.error(shell, "Can not create project", "Unable to create project when not connected to a sym");
 			return;
 		}
 
@@ -901,18 +835,7 @@ public class MainShell {
 		toolbar.pack();
 
 		tree = new Tree(self, SWT.NONE | SWT.BORDER | SWT.MULTI);
-//		tree.addListener(SWT.MouseEnter, new Listener() {
-//			public void handleEvent(Event e) {
-//				e.x = e.x;
-//			}
-//		});
-//		
-//		tree.addListener(SWT.MouseExit, new Listener() {
-//			public void handleEvent(Event e) {
-//				e.x = e.x;
-//			}
-//		});
-		
+
 		// Configure drag + drop
 		Transfer[] types = new Transfer[] { TextTransfer.getInstance() };
 		int operations = DND.DROP_MOVE | DND.DROP_COPY | DND.DROP_LINK;
@@ -987,11 +910,7 @@ public class MainShell {
 
 				if (event.item == null) {
 					System.out.println("Adding data to blank section");
-					// TreeItem item = new TreeItem(tree, SWT.NONE);
-					// item.setText(text);
 				} else {
-					
-					//Adding code back in
 					TreeItem tItem = (TreeItem)event.item;
 					Point pt = display.map(null, tree, event.x, event.y);
 					Rectangle bounds = tItem.getBounds();
@@ -1006,18 +925,12 @@ public class MainShell {
 							}
 						}
 						if (pt.y < bounds.y + bounds.height/3) {
-//							TreeItem newItem = new TreeItem(parent, SWT.NONE, index);
-//							newItem.setText(text);
 						} else if (pt.y > bounds.y + 2*bounds.height/3) {
-//							TreeItem newItem = new TreeItem(parent, SWT.NONE, index+1);
-//							newItem.setText(text);
 							index += 1;
 						} else {
-//							TreeItem newItem = new TreeItem(tItem, SWT.NONE);
-//							newItem.setText(text);
 							index = 0;
 						}
-						
+
 					} else {
 						TreeItem[] items = tree.getItems();
 						for (int i = 0; i < items.length; i++) {
@@ -1027,16 +940,9 @@ public class MainShell {
 							}
 						}
 						if (pt.y < bounds.y + bounds.height/3) {
-//							TreeItem newItem = new TreeItem(tree, SWT.NONE, index);
-//							newItem.setText(text);
-							
 						} else if (pt.y > bounds.y + 2*bounds.height/3) {
-//							TreeItem newItem = new TreeItem(tree, SWT.NONE, index+1);
-//							newItem.setText(text);
 							index += 1;
 						} else {
-//							TreeItem newItem = new TreeItem(tItem, SWT.NONE);
-//							newItem.setText(text);
 							index = 0;
 						}
 					}
@@ -1108,10 +1014,7 @@ public class MainShell {
 								if (RepDevMain.SYMITAR_SESSIONS.get(getTreeSym(root)) != null && RepDevMain.SYMITAR_SESSIONS.get(getTreeSym(root)).isConnected())
 									destination = new SymitarFile(getTreeSym(root), source.getName(), source.getType());
 								else {
-									MessageBox dialog = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
-									dialog.setMessage("You are copying to a sym that is not logged in, log in and try again.");
-									dialog.setText("Copy Error");
-									dialog.open();
+									DialogUtil.error(shell, "Copy Error", "You are copying to a sym that is not logged in, log in and try again.");
 									shell.setCursor(shell.getDisplay().getSystemCursor(SWT.CURSOR_ARROW));
 									return;
 								}
@@ -1151,10 +1054,7 @@ public class MainShell {
 								if (RepDevMain.SYMITAR_SESSIONS.get(getTreeSym(root)) != null && RepDevMain.SYMITAR_SESSIONS.get(getTreeSym(root)).isConnected())
 									destination = ProjectManager.createProject(source.getName(), getTreeSym(root), index);
 								else {
-									MessageBox dialog = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
-									dialog.setMessage("You are copying to a sym that is not logged in, log in and try again.");
-									dialog.setText("Copy Error");
-									dialog.open();
+									DialogUtil.error(shell, "Copy Error", "You are copying to a sym that is not logged in, log in and try again.");
 									shell.setCursor(shell.getDisplay().getSystemCursor(SWT.CURSOR_ARROW));
 									return;
 								}
@@ -1200,7 +1100,7 @@ public class MainShell {
 					// Dont redraw if we added to sym/dir
 					if (dragSourceItems[0].getData() instanceof Project
 							|| (dragSourceItems[0].getData() instanceof SymitarFile && !(root.getData() instanceof String || root.getData() instanceof Integer))) {
-						ArrayList<String> treesToExpand = new ArrayList<String>();							
+						ArrayList<String> treesToExpand = new ArrayList<>();							
 						if (root.getData() instanceof SymitarFile)
 							root = root.getParentItem().getParentItem();
 						else if (root.getData() instanceof Project)
@@ -1382,10 +1282,7 @@ public class MainShell {
 				if (seqs != null && seqs.size() > 0) {
 					openFile(seqs.get(0), file.getSym());
 				} else {
-					MessageBox dialog = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
-					dialog.setMessage("This report was not found within the last 40 REPWRITER jobs");
-					dialog.setText("Report Not Found");
-					dialog.open();
+					DialogUtil.error(shell, "Report Not Found", "This report was not found within the last 40 REPWRITER jobs");
 				}
 
 			}
@@ -1414,7 +1311,7 @@ public class MainShell {
 
 				if (seqs != null && seqs.size() > 0) {
 					// Create mini shell to pick report
-					final Shell dialog = new Shell(shell, SWT.DIALOG_TRIM);
+					final Shell dialog = new Shell(shell, SWT.DIALOG_TRIM | SWT.RESIZE);
 					FormLayout layout = new FormLayout();
 					layout.marginTop = 5;
 					layout.marginBottom = 5;
@@ -1489,10 +1386,7 @@ public class MainShell {
 					dialog.pack();
 					dialog.open();
 				} else {
-					MessageBox dialog = new MessageBox(shell, SWT.OK | SWT.ICON_ERROR);
-					dialog.setMessage("This report was not found within the last 40 REPWRITER jobs");
-					dialog.setText("Report Not Found");
-					dialog.open();
+					DialogUtil.error(shell, "Report Not Found", "This report was not found within the last 40 REPWRITER jobs");
 				}
 
 			}
@@ -1526,7 +1420,7 @@ public class MainShell {
 
 							// Activate the Tab for the RepGen
 							setMainFolderSelection(tf);
-							if(modified == true){
+							if(modified){
 								// If the RepGen was modified, prompt to save and install
 								((EditorComposite) mainfolder.getSelection().getControl()).installRepgen(true);
 							}
@@ -1537,11 +1431,7 @@ public class MainShell {
 						}
 					}
 					catch(NullPointerException err){
-						MessageBox dialog = null;
-						dialog = new MessageBox(Display.getCurrent().getActiveShell(),SWT.OK | SWT.ICON_ERROR );
-						dialog.setText("Installation Result");
-						dialog.setMessage("Error Installing RepGen: \nThis may be a new, unsaved, RepGen.");
-						dialog.open();
+						DialogUtil.error(Display.getCurrent().getActiveShell(), "Installation Result", "Error Installing RepGen: \nThis may be a new, unsaved, RepGen.");
 					}
 				}
 
@@ -1562,12 +1452,9 @@ public class MainShell {
 						dialog.open();
 					}
 					catch(NullPointerException err){
-						dialog = new MessageBox(Display.getCurrent().getActiveShell(),SWT.OK | SWT.ICON_ERROR );
-						dialog.setText("Installation Result");
-						dialog.setMessage("Error Installing RepGen: \nThe File may not, currently exist on Symitar");
-						dialog.open();
+						DialogUtil.error(Display.getCurrent().getActiveShell(), "Installation Result", "Error Installing RepGen: \nThe File may not, currently exist on Symitar");
 					}
-				}	
+				}
 			}
 		});
 
@@ -1757,10 +1644,7 @@ public class MainShell {
 				sym = (Integer) currentItem.getData();
 
 				if (!RepDevMain.SYMITAR_SESSIONS.get(sym).isConnected()) {
-					MessageBox dialog = new MessageBox(shell, SWT.ICON_ERROR | SWT.OK);
-					dialog.setText("Sym Logoff");
-					dialog.setMessage("This sym is not connected, cannot logoff!");
-					dialog.open();
+					DialogUtil.error(shell, "Sym Logoff", "This sym is not connected, cannot logoff!");
 					return;
 				}
 
@@ -1972,7 +1856,7 @@ public class MainShell {
 							} else { root.setImage(RepDevMain.smallSymOnImage); }
 						}
 					}
-					ArrayList<Project> projects = new ArrayList<Project>();
+					ArrayList<Project> projects = new ArrayList<>();
 
 					if (root.getData() instanceof Integer)
 						projects = ProjectManager.getProjects((Integer) root.getData());
@@ -2264,7 +2148,7 @@ public class MainShell {
 		Color bgcolor;
 		
 		try {
-			Style style = new Style(new File("styles\\" + Config.getStyle() + ".xml"));
+			Style style = new Style(new File("styles", Config.getStyle() + ".xml"));
 			bgcolor = new Color(Display.getCurrent(), style.getColor("editor", "line"));
 		} catch (Exception e) {
 			bgcolor = new Color(Display.getCurrent(), 220, 220, 220);
@@ -2482,16 +2366,24 @@ public class MainShell {
 		gc.setForeground(Display.getCurrent().getSystemColor(SWT.COLOR_DARK_RED));
 		gc.setAlpha(254);
 
+		// Track the overlay font so it can be disposed below - this is called on every
+		// remote-file tree icon draw/refresh, and neither the font nor the intermediate
+		// image/mask were ever released, leaking GDI handles over a long session.
+		Font symFont;
 		if (sym < 100) {
-			gc.setFont(new Font(Display.getCurrent(), "Courier New", 8, SWT.BOLD));
+			symFont = new Font(Display.getCurrent(), "Courier New", 8, SWT.BOLD);
+			gc.setFont(symFont);
 			gc.drawString(String.valueOf(sym), 16 - 7 * String.valueOf(sym).length(), 0, true);
 		} else {
-			gc.setFont(new Font(Display.getCurrent(), "Courier New", 7, SWT.BOLD));
+			symFont = new Font(Display.getCurrent(), "Courier New", 7, SWT.BOLD);
+			gc.setFont(symFont);
 			gc.drawString(String.valueOf(sym), 0, 0, true);
 		}
 		gc.dispose();
+		symFont.dispose();
 
 		ImageData imageData = image.getImageData();
+		image.dispose();
 		PaletteData palette = new PaletteData(new RGB[] { new RGB(0, 0, 0), new RGB(0xFF, 0xFF, 0xFF), });
 		ImageData maskData = new ImageData(16, 16, 1, palette);
 		Image mask = new Image(display, maskData);
@@ -2500,6 +2392,7 @@ public class MainShell {
 		gc.fillRectangle(0, 0, 16, 16);
 		gc.dispose();
 		maskData = mask.getImageData();
+		mask.dispose();
 
 		return new Image(display, imageData, maskData);
 	}
@@ -2593,7 +2486,7 @@ public class MainShell {
 
 		// XP Theme Color Tabs With Gradient start
 		  try {
-				  File file = new File("styles\\" + Config.getStyle() + ".xml");
+				  File file = new File("styles", Config.getStyle() + ".xml");
 				  DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 				  DocumentBuilder db = dbf.newDocumentBuilder();
 				  Document doc = db.parse(file);
@@ -2732,10 +2625,6 @@ public class MainShell {
 					boolean after = p.x > rect.x + rect.width / 2;
 					mainfolder.setInsertMark(item, after);
 					drawDestTabRect(item);
-//				    // Workaround for bug #32846
-//				    if (item == -1) {
-//				    	mainfolder.redraw();
-//				    }
 					break;
 				}
 				}
@@ -3092,7 +2981,7 @@ public class MainShell {
 	}
 	SymitarFile currNavFile;
 	int currNavLine;
-	private ArrayList<NavHistoryItem> navHistory = new ArrayList<NavHistoryItem>();
+	private ArrayList<NavHistoryItem> navHistory = new ArrayList<>();
 	private static final int NAVIGATE_HISTORY_LIMIT = 200;
 	private static final int NAVIGATE_HISTORY_LINE_CHANGE = 50;
 	
@@ -3991,32 +3880,6 @@ public class MainShell {
 					RepDevMain.mainShell.runReport(((EditorComposite) mainfolder.getSelection().getControl()).getFile());
 			}
 		});
-	}
-
-	private void setEditorBarStatus() {
-		if (mainfolder.getSelection().getControl() instanceof EditorComposite) {
-			SymitarFile file = ((EditorComposite) mainfolder.getSelection().getControl()).getFile();
-			if (file.getType() != FileType.REPGEN || file.isLocal())
-				install.setEnabled(false);
-			else
-				install.setEnabled(true);
-
-			if (file.getType() != FileType.REPGEN || file.isLocal())
-				run.setEnabled(false);
-			else
-				run.setEnabled(true);
-
-			savetb.setEnabled(true);
-
-			if ((file.getType() == FileType.REPGEN)||(file.getType() == FileType.LETTER)||(file.getType() == FileType.HELP)||(file.getType() == FileType.DATA))
-				hltoggle.setEnabled(true);
-		} else {
-			savetb.setEnabled(false);
-			run.setEnabled(false);
-			install.setEnabled(false);
-			print.setEnabled(true);
-			hltoggle.setEnabled(false);
-		}
 	}
 
 	public Shell getShell() {

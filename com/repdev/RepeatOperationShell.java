@@ -26,7 +26,6 @@ import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 
@@ -52,16 +51,13 @@ public class RepeatOperationShell {
 	public int open(){
 		buildGUI();
 		
-		while (!shell.isDisposed()) {
-			if (!Display.getCurrent().readAndDispatch())
-				Display.getCurrent().sleep();
-		}
+		DialogUtil.pumpUntilClosed(shell);
 		
 		return result;
 	}
 
 	private void buildGUI() {
-		shell = new Shell(parent,SWT.DIALOG_TRIM);
+		shell = new Shell(parent,SWT.DIALOG_TRIM | SWT.RESIZE);
 		
 		FormLayout layout = new FormLayout();
 		layout.marginTop = 5;

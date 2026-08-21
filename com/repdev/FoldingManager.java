@@ -99,8 +99,8 @@ public class FoldingManager implements HiddenTextProvider {
 	private final RepgenParser parser;
 	private final EditorComposite editor;
 
-	private final ArrayList<FoldRegion> folded = new ArrayList<FoldRegion>();
-	private final ArrayList<FoldableRange> foldable = new ArrayList<FoldableRange>();
+	private final ArrayList<FoldRegion> folded = new ArrayList<>();
+	private final ArrayList<FoldableRange> foldable = new ArrayList<>();
 
 	/** Fallback triangle color when the active style declares no <folding fgColor="..."/>. */
 	private static final RGB DEFAULT_MARKER_RGB = new RGB(90, 90, 90);
@@ -150,7 +150,7 @@ public class FoldingManager implements HiddenTextProvider {
 		RGB bg = null;
 		String shape = SHAPE_TRIANGLE;
 		try {
-			Style style = new Style(new File("styles\\" + Config.getStyle() + ".xml"));
+			Style style = new Style(new File("styles", Config.getStyle() + ".xml"));
 			RGB c = style.getColor("folding", "fgColor");
 			if (c != null) rgb = c;
 			String s = style.getValue("folding", "shape");
@@ -335,7 +335,7 @@ public class FoldingManager implements HiddenTextProvider {
 	}
 
 	public Iterable<String> getUsageSearchableHiddenText() {
-		ArrayList<String> result = new ArrayList<String>();
+		ArrayList<String> result = new ArrayList<>();
 		for (int i = 0; i < folded.size(); i++) {
 			FoldRegion fr = folded.get(i);
 			String header = headerLineText(fr.headerLine);
@@ -403,8 +403,8 @@ public class FoldingManager implements HiddenTextProvider {
 		// instead of the real END. That misclick then strands the inner
 		// folds (DO/END etc.) outside the new fold's hiddenText, leaving them
 		// as ghost entries with headerLines past the visible buffer.
-		HashSet<Integer> foldedHeaderLines = new HashSet<Integer>();
-		HashSet<Integer> orphanCloserLines = new HashSet<Integer>();
+		HashSet<Integer> foldedHeaderLines = new HashSet<>();
+		HashSet<Integer> orphanCloserLines = new HashSet<>();
 		for (int i = 0; i < folded.size(); i++) {
 			FoldRegion fr = folded.get(i);
 			foldedHeaderLines.add(fr.headerLine);
@@ -414,7 +414,7 @@ public class FoldingManager implements HiddenTextProvider {
 			}
 		}
 
-		Stack<Integer> stack = new Stack<Integer>();
+		Stack<Integer> stack = new Stack<>();
 		int charCount = txt.getCharCount();
 		for (int i = 0; i < tokens.size(); i++) {
 			Token t = tokens.get(i);
@@ -552,7 +552,7 @@ public class FoldingManager implements HiddenTextProvider {
 		boolean prevBatch = batchMode;
 		batchMode = true;
 		HashSet<String> prevSnapshot = preBatchHiddenTexts;
-		preBatchHiddenTexts = new HashSet<String>();
+		preBatchHiddenTexts = new HashSet<>();
 		// With pre-batch folds now fully expanded above, there are no
 		// pre-batch hiddenTexts to track; the snapshot below is exhaustive.
 		// Keep the field-allocation pattern so nested-expansion math elsewhere
@@ -636,7 +636,7 @@ public class FoldingManager implements HiddenTextProvider {
 		// this range can end up with a current headerLine inside the stale
 		// range.endLine. Use originalHeaderLine — the batch-t=0 coord — so the
 		// test stays consistent with the snapshot range's own t=0 bounds.
-		ArrayList<FoldRegion> nested = new ArrayList<FoldRegion>();
+		ArrayList<FoldRegion> nested = new ArrayList<>();
 		for (int i = 0; i < folded.size(); i++) {
 			FoldRegion fr = folded.get(i);
 			int probe = batchMode ? fr.originalHeaderLine : fr.headerLine;

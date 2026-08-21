@@ -51,8 +51,7 @@ public class DatabaseLayout {
 		recPattern = Pattern.compile("(.*)\\*\\*\\*\\|(.*)\\|(.*)");
 		fieldPattern = Pattern.compile("([\\s]*)([a-zA-Z0-9:]*)\\|(.*)\\|(.*)\\|(.*)\\|(.*)");
 
-		try {
-			BufferedReader br = new BufferedReader(new FileReader("db.txt"));
+		try (BufferedReader br = new BufferedReader(new FileReader("db.txt"))) {
 			String line;
 
 			while ((line = br.readLine()) != null) {
@@ -114,9 +113,8 @@ public class DatabaseLayout {
 			}
 
 			System.out.println("Loaded DB Layout");
-
-			br.close();
 		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 
