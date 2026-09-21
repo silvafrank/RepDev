@@ -26,15 +26,18 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Stack;
 
+import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.ExtendedModifyEvent;
 import org.eclipse.swt.custom.ExtendedModifyListener;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.MouseAdapter;
 import org.eclipse.swt.events.MouseEvent;
+import org.eclipse.swt.events.MouseMoveListener;
 import org.eclipse.swt.events.PaintEvent;
 import org.eclipse.swt.events.PaintListener;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.GC;
+import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.RGB;
 
 import com.repdev.parser.HiddenTextProvider;
@@ -111,6 +114,10 @@ public class FoldingManager implements HiddenTextProvider {
 	private Color markerColor;
 	// Always-on vertical guide line drawn from each expanded block's icon down to its end.
 	private Color guideColor;
+	// VSCode-style indent guides drawn through the text body itself (see paintIndentGuides).
+	// Fainter than guideColor since one of these appears on nearly every indented line,
+	// versus guideColor's sparser one-per-foldable-block use in the gutter.
+	private Color indentGuideColor;
 	// Which glyph to paint in the fold gutter. Defaults to triangles; a style may opt
 	// into boxed +/- markers with shape="plusminus".
 	private String markerShape = SHAPE_TRIANGLE;
@@ -164,10 +171,13 @@ public class FoldingManager implements HiddenTextProvider {
 
 		Color oldMarker = markerColor;
 		Color oldGuide = guideColor;
+		Color oldIndent = indentGuideColor;
 		markerColor = new Color(txt.getDisplay(), rgb);
 		guideColor = new Color(txt.getDisplay(), guideRgb);
+		indentGuideColor = new Color(txt.getDisplay(), dimToward(guideRgb, bg)); // one step fainter than guideColor
 		if (oldMarker != null && !oldMarker.isDisposed()) oldMarker.dispose();
 		if (oldGuide != null && !oldGuide.isDisposed()) oldGuide.dispose();
+		if (oldIndent != null && !oldIndent.isDisposed()) oldIndent.dispose();
 		markerShape = shape;
 	}
 
@@ -199,6 +209,7 @@ public class FoldingManager implements HiddenTextProvider {
 	private ExtendedModifyListener modifyListener;
 	private PaintListener paintListener;
 	private MouseAdapter mouseListener;
+	private MouseMoveListener cursorListener;
 
 	private void install() {
 		// Registered first so headerLine shifts complete before downstream
@@ -222,17 +233,33 @@ public class FoldingManager implements HiddenTextProvider {
 
 		mouseListener = new MouseAdapter() {
 			public void mouseDown(MouseEvent e) {
-				if (e.button != 1 || txt.getLineHeight() == 0) return;
-				int gutter = editor.calcWidth();
-				int foldColStart = gutter - FOLD_COLUMN_WIDTH;
-				if (foldColStart < 0) foldColStart = 0;
-				if (e.x < foldColStart || e.x > gutter) return;
-				int line = txt.getTopIndex() + (e.y / txt.getLineHeight());
+				if (e.button != 1 || txt.getLineHeight() == 0 || !isOverFoldColumn(e.x)) return;
+				// getLineIndex(y) matches how StyledText itself maps pixels to lines
+				// (accounts for the widget's own pixel-scroll offset); the previous
+				// topIndex + y/lineHeight math could drift by a line depending on
+				// scroll position, which was why clicks landed inconsistently.
+				int line = txt.getLineIndex(e.y);
 				if (line < 0 || line >= txt.getLineCount()) return;
 				toggleAtLine(line);
 			}
 		};
 		txt.addMouseListener(mouseListener);
+
+		// Swap to a plain arrow over the fold column so it doesn't look like
+		// clickable text (I-beam) — the gutter isn't editable text.
+		cursorListener = new MouseMoveListener() {
+			public void mouseMove(MouseEvent e) {
+				if (txt.isDisposed()) return;
+				txt.setCursor(isOverFoldColumn(e.x) ? txt.getDisplay().getSystemCursor(SWT.CURSOR_ARROW) : null);
+			}
+		};
+		txt.addMouseMoveListener(cursorListener);
+	}
+
+	private boolean isOverFoldColumn(int x) {
+		int gutter = editor.calcWidth();
+		int foldColStart = Math.max(gutter - FOLD_COLUMN_WIDTH, 0);
+		return x >= foldColStart && x <= gutter;
 	}
 
 	/**
@@ -1017,6 +1044,69 @@ public class FoldingManager implements HiddenTextProvider {
 		return lineCount;
 	}
 
+	/**
+	 * VSCode-style indent guides: a faint vertical line through the text body at
+	 * each full indent level (every {@code tabWidth} leading whitespace chars),
+	 * spanning the height of every line whose own indent reaches that level.
+	 * Computed per-line straight from each line's leading whitespace — unlike
+	 * the fold guide line above, this isn't tied to the RepGen block structure,
+	 * so it tracks whatever indentation the user actually typed (IF/THEN
+	 * nesting, etc. included, not just foldable DEFINE/DO/PROCEDURE blocks).
+	 *
+	 * Draws a guide at every level from the left edge inward — including the
+	 * outermost one — rather than skipping straight to the second level: a
+	 * single-indented line and a triple-indented line should both read as
+	 * "inside a block", not just the deeper one.
+	 *
+	 * Blank lines borrow the next non-blank line's depth (see effectiveIndent)
+	 * so guides don't visibly gap for every blank line inside a block, matching
+	 * VSCode's behavior instead of the plain per-line reading.
+	 */
+	private void paintIndentGuides(GC gc, int topLine, int maxLine, int lh) {
+		int tabWidth = txt.getTabs();
+		if (tabWidth < 1) tabWidth = 1;
+		gc.setForeground(indentGuideColor);
+		int charWidth = gc.textExtent("0").x; // monospace font throughout this editor (see every styles/*.xml)
+
+		for (int line = topLine; line < maxLine; line++) {
+			int indentChars = effectiveIndent(line);
+			if (indentChars < tabWidth) continue; // no full indent stop reached
+
+			int x0, y;
+			try {
+				Point loc = txt.getLocationAtOffset(txt.getOffsetAtLine(line));
+				x0 = loc.x;
+				y = loc.y;
+			} catch (IllegalArgumentException ex) { continue; }
+
+			for (int stop = 0; stop < indentChars; stop += tabWidth) {
+				int x = x0 + stop * charWidth;
+				gc.drawLine(x, y, x, y + lh);
+			}
+		}
+	}
+
+	/** A line's own leading-whitespace depth, or — if the line is blank — the next non-blank line's depth within a short lookahead, so guides don't gap on every blank line inside a block. */
+	private int effectiveIndent(int line) {
+		String text;
+		try { text = txt.getLine(line); } catch (IllegalArgumentException ex) { return 0; }
+		if (!text.trim().isEmpty()) return leadingWhitespaceCount(text);
+
+		int limit = Math.min(line + 25, txt.getLineCount());
+		for (int l = line + 1; l < limit; l++) {
+			String t;
+			try { t = txt.getLine(l); } catch (IllegalArgumentException ex) { break; }
+			if (!t.trim().isEmpty()) return leadingWhitespaceCount(t);
+		}
+		return 0;
+	}
+
+	private static int leadingWhitespaceCount(String s) {
+		int n = 0;
+		while (n < s.length() && (s.charAt(n) == ' ' || s.charAt(n) == '\t')) n++;
+		return n;
+	}
+
 	private void paintMarkers(PaintEvent e) {
 		if (txt.isDisposed() || txt.getLineHeight() == 0) return;
 		int lh = txt.getLineHeight();
@@ -1031,6 +1121,8 @@ public class FoldingManager implements HiddenTextProvider {
 		GC gc = e.gc;
 		Color oldFg = gc.getForeground();
 		Color oldBg = gc.getBackground();
+
+		paintIndentGuides(gc, topLine, maxLine, lh);
 
 		// Always-on fold guide lines: a dimmed vertical line from each expanded block's
 		// icon down to its end line, capped with a short foot (└). Drawn before the glyphs
@@ -1106,8 +1198,11 @@ public class FoldingManager implements HiddenTextProvider {
 			if (modifyListener != null) txt.removeExtendedModifyListener(modifyListener);
 			if (paintListener != null) txt.removePaintListener(paintListener);
 			if (mouseListener != null) txt.removeMouseListener(mouseListener);
+			if (cursorListener != null) txt.removeMouseMoveListener(cursorListener);
+			txt.setCursor(null);
 		}
 		if (markerColor != null && !markerColor.isDisposed()) markerColor.dispose();
 		if (guideColor != null && !guideColor.isDisposed()) guideColor.dispose();
+		if (indentGuideColor != null && !indentGuideColor.isDisposed()) indentGuideColor.dispose();
 	}
 }

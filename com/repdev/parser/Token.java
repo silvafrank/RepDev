@@ -197,18 +197,10 @@ public class Token {
 		if (!record.dbRecordValid())
 			return false;
 
-		String recordName = record.getStr();
-
-		for (Record rec : DatabaseLayout.getInstance().getFlatRecords()) {
-			if (rec.getName().toLowerCase().equals(recordName)) {
-				for (Field field : rec.getFields()) {
-					if (field.getName().toLowerCase().equals(str))
-						return true;
-				}
-			}
-		}
-
-		return false;
+		// O(1) record-scoped lookup — used to linear-scan every record in the whole
+		// DB (hundreds+) looking for a name match, for every colon-adjacent token on
+		// every repaint.
+		return DatabaseLayout.getInstance().recordHasField(record.getStr(), str);
 	}
 
 	public boolean dbFieldValidNoSubFld(ArrayList<Record> records) {
@@ -220,21 +212,23 @@ public class Token {
 		if (!record.dbRecordValid())
 			return false;
 
-		String recordName = record.getStr();
 		String [] tmpField = str.split(":");
 
-		for (Record rec : DatabaseLayout.getInstance().getFlatRecords()) {
-			if (rec.getName().toLowerCase().equals(recordName)) {
-				for (Field field : rec.getFields()) {
-					String [] tmp = field.getName().toLowerCase().split(":");
-					if (tmp.length>0 && tmp[0].equals(tmpField[0])) {
-						if ( tmpField.length>1 && tmpField[1].indexOf("(") == 0 && tmpField[1].indexOf(")") == tmpField[1].length() - 1 ) {
-							String myVar= tmpField[1].substring(1, tmpField[1].length() - 1);
-							// if(isVar(myVar)) return true; //TODO: need to find a way to validate the info in the parenthesis is a variable.
-							return true;
-							
-						}
-					}
+		// O(1) hop straight to the right record instead of scanning every record in
+		// the DB for a name match; the per-field prefix check below still needs the
+		// original loop since it's not a plain name-equality match.
+		Record rec = DatabaseLayout.getInstance().getRecordByName(record.getStr());
+		if (rec == null)
+			return false;
+
+		for (Field field : rec.getFields()) {
+			String [] tmp = field.getName().toLowerCase().split(":");
+			if (tmp.length>0 && tmp[0].equals(tmpField[0])) {
+				if ( tmpField.length>1 && tmpField[1].indexOf("(") == 0 && tmpField[1].indexOf(")") == tmpField[1].length() - 1 ) {
+					String myVar= tmpField[1].substring(1, tmpField[1].length() - 1);
+					// if(isVar(myVar)) return true; //TODO: need to find a way to validate the info in the parenthesis is a variable.
+					return true;
+
 				}
 			}
 		}

@@ -66,12 +66,15 @@ import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
+import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
+import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.swt.widgets.MessageBox;
+import org.eclipse.swt.widgets.Shell;
 
 import com.repdev.parser.Formatter;
 import com.repdev.parser.Include;
@@ -500,6 +503,83 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 		return tabStr;
 	}
 
+	/**
+	 * Computes the indent for the new line created by pressing Enter at
+	 * {@code viewCaret}. RepGen has no required indentation, but this app's
+	 * convention is one level per still-open block (DO/END, DEFINE/END,
+	 * PROCEDURE/END, SELECT/END, SORT/END, parens, brackets — same head/end
+	 * pairs as {@link com.repdev.parser.Token#isRealHead()}), plus a one-line
+	 * bump for a single-statement IF/ELSEIF...THEN or ELSE body, which has no
+	 * closing token of its own so the bump must revert on the very next line
+	 * instead of persisting like the old copy-previous-line behavior did.
+	 *
+	 * The indent unit itself isn't assumed: it's measured off the current
+	 * line against its nearest open block, so a function that already uses
+	 * two-space bodies keeps getting two-space bodies instead of being forced
+	 * to this app's single-space default.
+	 *
+	 * Falls back to copying the current line's leading whitespace verbatim
+	 * for non-RepGen files (help/letter) or before the parser has tokens.
+	 */
+	private String computeAutoIndent(int viewCaret) {
+		int curLine = txt.getLineAtOffset(viewCaret);
+		String curLineIndent = leadingWhitespace(txt.getLine(curLine));
+
+		if (parser == null || !doParse) return curLineIndent;
+
+		ArrayList<Token> tokens = parser.getLtokens();
+		if (tokens == null || tokens.isEmpty()) return curLineIndent;
+
+		int caretModel = (folding != null) ? folding.viewToModel(viewCaret) : viewCaret;
+		if (caretModel < 0) return curLineIndent;
+
+		// Walk every token before the caret, tracking still-open block heads
+		// and the last real (non-comment/string/date) token, same pattern as
+		// Formatter.getFormattedFile() and handleCaretChange()'s block matcher.
+		Stack<Token> openHeads = new Stack<>();
+		Token lastReal = null;
+		for (Token t : tokens) {
+			if (t.getStart() >= caretModel) break;
+			if (t.isRealHead())
+				openHeads.push(t);
+			else if (t.isRealEnd() && !openHeads.isEmpty())
+				openHeads.pop();
+			if (t.getCDepth() == 0 && !t.inString() && !t.inDate())
+				lastReal = t;
+		}
+
+		// Measure the local indent unit off the innermost open block: if this
+		// line is already indented past that block's own header line, the
+		// extra whitespace IS the unit in use here. Otherwise fall back to
+		// the configured default.
+		String unit = getTabStr();
+		if (!openHeads.isEmpty()) {
+			int headView = folding != null ? folding.modelToView(openHeads.peek().getStart()) : openHeads.peek().getStart();
+			if (headView >= 0) {
+				String headIndent = leadingWhitespace(txt.getLine(txt.getLineAtOffset(headView)));
+				if (curLineIndent.length() > headIndent.length())
+					unit = curLineIndent.substring(headIndent.length());
+			}
+		}
+
+		StringBuilder indent = new StringBuilder();
+		for (int i = 0; i < openHeads.size(); i++)
+			indent.append(unit);
+
+		boolean bumpForThenElse = lastReal != null
+				&& ("then".equals(lastReal.getStr()) || "else".equals(lastReal.getStr()));
+		if (bumpForThenElse)
+			indent.append(unit);
+
+		return indent.toString();
+	}
+
+	private static String leadingWhitespace(String line) {
+		int n = 0;
+		while (n < line.length() && (line.charAt(n) == ' ' || line.charAt(n) == '\t')) n++;
+		return line.substring(0, n);
+	}
+
 	public StyledText getStyledText(){
 		return txt;
 	}
@@ -717,18 +797,7 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 				}
 
 				if (e.text.equals("\r\n")) {
-					String indent = "";
-					int posStart = txt.getOffsetAtLine(txt.getLineAtOffset(e.start));
-					int posEnd = e.start;
-					String lastLine = txt.getTextRange(posStart, posEnd - posStart);
-
-					for (int i = 0; i < lastLine.length(); i++)
-						if (lastLine.charAt(i) != ' ' && lastLine.charAt(i) != '\t')
-							break;
-						else
-							indent += lastLine.charAt(i);
-
-					e.text += indent;
+					e.text += computeAutoIndent(e.start);
 
 					lineHighlight();
 					commitUndo();
@@ -1051,6 +1120,8 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 					if( e.keyCode == SWT.F8 )
 						installRepgen(true);
 				}
+				if( e.stateMask == SWT.SHIFT && e.keyCode == SWT.F3 )
+					RepDevMain.mainShell.findPrevious();
 
 				if (e.keyCode == SWT.ARROW_DOWN || e.keyCode == SWT.ARROW_LEFT || e.keyCode == SWT.ARROW_RIGHT || e.keyCode == SWT.ARROW_UP){
 					commitUndo();
@@ -1989,8 +2060,91 @@ public class EditorComposite extends Composite implements TabTextEditorView {
 	 * @param errorCheck Flag to check errors with symitar
 	 */
 	public void saveFile( boolean errorCheck ){
-		String toSave = (folding != null) ? folding.getUnfoldedText() : txt.getText();
-		file.saveFile(toSave);
+		final String toSave = (folding != null) ? folding.getUnfoldedText() : txt.getText();
+
+		// file.saveFile() talks to the host over a socket with no read timeout
+		// once connected (DirectSymitarSession deliberately skips one post-connect,
+		// since legitimate report output can take a while) - so on a sym with no
+		// write permission (e.g. sym00/sym25) the host never replies and this call
+		// can block forever. Run it off the UI thread and show a cancellable wait
+		// dialog instead of freezing the whole app with no way out.
+		final Shell waitShell = new Shell(getShell(), SWT.APPLICATION_MODAL | SWT.CLOSE | SWT.TITLE);
+		waitShell.setText("Saving");
+		FormLayout waitLayout = new FormLayout();
+		waitLayout.marginTop = 10;
+		waitLayout.marginBottom = 10;
+		waitLayout.marginLeft = 10;
+		waitLayout.marginRight = 10;
+		waitLayout.spacing = 5;
+		waitShell.setLayout(waitLayout);
+
+		Label waitLabel = new Label(waitShell, SWT.NONE);
+		waitLabel.setText("Saving " + file.getName() + " to SYM" + file.getSym() + "...");
+
+		Button cancelButton = new Button(waitShell, SWT.PUSH);
+		cancelButton.setText("Cancel");
+		cancelButton.addSelectionListener(new SelectionAdapter(){
+			public void widgetSelected(SelectionEvent e){
+				waitShell.close();
+			}
+		});
+
+		FormData data = new FormData();
+		data.top = new FormAttachment(0);
+		data.left = new FormAttachment(0);
+		waitLabel.setLayoutData(data);
+
+		data = new FormData();
+		data.top = new FormAttachment(waitLabel);
+		data.right = new FormAttachment(100);
+		cancelButton.setLayoutData(data);
+
+		waitShell.setDefaultButton(cancelButton);
+		waitShell.pack();
+		waitShell.open();
+
+		final Display display = getDisplay();
+		final SessionError[] resultHolder = new SessionError[1];
+		final Throwable[] errorHolder = new Throwable[1];
+		final boolean[] done = new boolean[1];
+
+		Thread saveThread = new Thread(new Runnable(){
+			public void run(){
+				try {
+					resultHolder[0] = file.saveFile(toSave);
+				} catch( Throwable t ){
+					errorHolder[0] = t;
+				}
+				done[0] = true;
+				display.asyncExec(new Runnable(){
+					public void run(){
+						if( !waitShell.isDisposed() )
+							waitShell.close();
+					}
+				});
+			}
+		}, "File Save: " + file.getName());
+		// ponytail: if the user cancels while the host is hung, this thread stays
+		// blocked on the read forever - daemon so it can't keep the app alive.
+		// Add a real socket read timeout in DirectSymitarSession if leaked threads
+		// from repeated cancels ever become a problem in practice.
+		saveThread.setDaemon(true);
+		saveThread.start();
+
+		DialogUtil.pumpUntilClosed(waitShell);
+
+		if( !done[0] )
+			return; // cancelled before the save finished - leave modified/undo state untouched
+
+		if( errorHolder[0] != null ){
+			DialogUtil.error(Display.getCurrent().getActiveShell(), "Save Failed",
+					"Could not save " + file.getName() + ":\n" + errorHolder[0].getMessage());
+			return;
+		}
+
+		if( resultHolder[0] != null && resultHolder[0] != SessionError.NONE )
+			return; // file.saveFile() already showed its own dismissible error dialog
+
 		commitUndo();
 		modified = false;
 		updateModified();

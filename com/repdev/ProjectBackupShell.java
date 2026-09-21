@@ -12,7 +12,6 @@ import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
-import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.ProgressBar;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
@@ -43,11 +42,11 @@ public class ProjectBackupShell {
 		layout.makeColumnsEqualWidth = true;
 		
 		// Groups
-		Group restoreGroup = new Group(shell, SWT.NONE);
+		Section restoreGroup = new Section(shell, SWT.NONE);
 		restoreGroup.setText("Restore/Replace");
 		restoreGroup.setLayout(new GridLayout(2,false));
 		
-		Group statusGroup = new Group(shell, SWT.NONE);
+		Section statusGroup = new Section(shell, SWT.NONE);
 		statusGroup.setText("Status");
 		statusGroup.setLayout(new GridLayout(1,false));
 		

@@ -33,7 +33,6 @@ import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Display;
-import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Spinner;
@@ -62,7 +61,7 @@ public class FMShell {
 		shell.setText("Run FM Options");
 		shell.setLayout(layout);
 		
-		Group fmFields = new Group(shell,SWT.NONE);
+		Section fmFields = new Section(shell,SWT.NONE);
 		fmFields.setText("File Maintenance Fields");
 		layout = new FormLayout();
 		layout.marginTop = 5;
@@ -72,7 +71,7 @@ public class FMShell {
 		layout.spacing = 5;
 		fmFields.setLayout(layout);
 		
-		Group queueGroup = new Group(shell,SWT.NONE);
+		Section queueGroup = new Section(shell,SWT.NONE);
 		queueGroup.setText("Queue Control");
 		layout = new FormLayout();
 		layout.marginTop = 5;
@@ -184,7 +183,7 @@ public class FMShell {
 		data = new FormData();
 		data.left = new FormAttachment(0);
 		data.right = new FormAttachment(100);
-		data.top = new FormAttachment(fmFields);
+		data.top = new FormAttachment(fmFields, 8); // breathing room between stacked sections now that there's no GroupBox border to separate them
 		queueGroup.setLayoutData(data);
 		
 		data = new FormData();
@@ -249,7 +248,7 @@ public class FMShell {
 		
 		
 		data = new FormData();
-		data.top = new FormAttachment(queueGroup);
+		data.top = new FormAttachment(queueGroup, 8);
 		data.right = new FormAttachment(100);
 		cancelButton.setLayoutData(data);
 		cancelButton.addSelectionListener(new SelectionAdapter(){
@@ -263,7 +262,7 @@ public class FMShell {
 		
 		data = new FormData();
 		data.right = new FormAttachment(cancelButton);
-		data.top= new FormAttachment(queueGroup);
+		data.top= new FormAttachment(queueGroup, 8);
 		okButton.setLayoutData(data);
 		okButton.addSelectionListener(new SelectionAdapter(){
 			@Override

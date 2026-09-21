@@ -1,48 +1,51 @@
 <RepDevStyle>
   <header>
     <name>GhostRider</name>
-    <version>1.0</version>
+    <version>1.1</version>
     <author>Ryan L</author>
-    <description><![CDATA[This is Called GhostRider. Based on this VS2005 Theme (http://followtheheard.blogspot.com/2008/02/visual-studio-settings.html).]]>
+    <description><![CDATA[Originally based on a VS2005 theme (http://followtheheard.blogspot.com/2008/02/visual-studio-settings.html). Refreshed with a modern VSCode Dark+ / One Dark Pro–style palette: near-black background, muted low-contrast chrome (line numbers, fold guides), and a warmer accent-color set for tokens instead of the old primary red/green/blue.]]>
     </description>
   </header>
   <style>
   	<!-- Editor Tab Theme -->
-  	<tabStyle fgColor="#FFFFFF" bgcolor1="0A246A" bgcolor2="A6CAF0" />
+  	<tabStyle fgColor="#D4D4D4" bgcolor1="2D2E3A" bgcolor2="1E1E1E" />
     <!-- General -->
-    <editor bgColor="#3F3F3F" fgColor="#F7E29F" line="#373737" token="#020000" font="Consolas" fontSize="11" />
-    
-    <linenumber fgColor="#C0C0C0" />
+    <editor bgColor="#1E1E1E" fgColor="#D4D4D4" line="#2A2D2E" token="#264653" font="Consolas" fontSize="11" />
+
+    <linenumber fgColor="#6A737D" />
     <!-- Fold gutter markers. fgColor sets the icon color.
          shape="triangle" (default) or shape="plusminus" for boxed +/- icons.
          guideColor sets the vertical block-guide line; omit for a dimmed default. -->
-    <folding fgColor="#B5A76A" shape="triangle" />
-    
+    <folding fgColor="#6A737D" guideColor="#5FB88F" shape="triangle" />
+
     <!-- Comments -->
-    <comments fgColor="#7F9F7F" style="italic"/>
-    
+    <comments fgColor="#6A9955" style="italic"/>
+
     <!-- Variables -->
-    <variables fgColor="#8EC46F" style="bold" />
-    
-    <!-- Built in functions -->  
-    <functions fgColor="#DFDFBF" style="bold" /> 
-    
-    <!-- Strings -->   
-    <keywords fgColor="#DCDCCC" />
-    
+    <variables fgColor="#9CDCFE" style="bold" />
+
+    <!-- Built in functions -->
+    <functions fgColor="#DCDCAA" style="bold" />
+
+    <!-- Keywords -->
+    <keywords fgColor="#E5C07B" />
+
+    <!-- Numeric literals -->
+    <numbers fgColor="#B5CEA8" />
+
     <!-- Tasks (TODO ...) -->
-    <task fgColor="#FFFFFF" style="bold" />
-    
+    <task fgColor="#FF8C42" style="bold" />
+
     <!-- Strings -->
-    <typeChar fgColor="#C89191" />
-    
+    <typeChar fgColor="#CE9178" />
+
     <!-- Dates -->
-    <typeDate fgColor="#8ACCCF" style="bold" />
-    
+    <typeDate fgColor="#56B6C2" style="bold" />
+
     <!-- colors for Tables and records  EX - struct1:struct2. Valid color and invalid color-->
-    <struct1 fgColor="#C2A588" />
-    <struct1Inv fgColor="#F7E29F" bgColor="#C44309" />   
-    <struct2 fgColor="#A2A2C2" />
-    <struct2Inv fgColor="#F7E29F" bgColor="#C44309" />   
+    <struct1 fgColor="#C586C0" />
+    <struct1Inv fgColor="#C586C0" bgColor="#6E2020" />
+    <struct2 fgColor="#D9A8DA" />
+    <struct2Inv fgColor="#D9A8DA" bgColor="#6E2020" />
   </style>
 </RepDevStyle>

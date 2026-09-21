@@ -30,7 +30,6 @@ import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
@@ -81,7 +80,7 @@ public class DefineVarShell {
 
 			shell.setText("Define Variable");
 
-			Group varGroup = new Group(shell, SWT.NONE);
+			Section varGroup = new Section(shell, SWT.NONE);
 			varGroup.setText("  Variable Options for - "+varName+"  ");
 			
 			Label varTypeLabel = new Label(varGroup, SWT.NONE);
@@ -121,7 +120,7 @@ public class DefineVarShell {
 			Label commentTextOptLabel = new Label(varGroup, SWT.NONE);
 			commentTextOptLabel.setText("(Optional)");
 			
-			Group preview = new Group(shell,SWT.NONE);
+			Section preview = new Section(shell,SWT.NONE);
 			preview.setText("Preview");
 			
 			final Text previewText = new Text(preview, SWT.READ_ONLY|SWT.MULTI);
@@ -311,13 +310,13 @@ public class DefineVarShell {
 			
 			preview.setLayout(layout);
 			data = new FormData();
-			data.top = new FormAttachment(varGroup);
+			data.top = new FormAttachment(varGroup, 8); // breathing room between stacked sections now that there's no GroupBox border to separate them
 			data.left = new FormAttachment(0);
 			data.right = new FormAttachment(100);
 			preview.setLayoutData(data);
-			
+
 			data = new FormData();
-			data.top = new FormAttachment(varGroup);
+			data.top = new FormAttachment(varGroup, 8);
 			data.left = new FormAttachment(0);
 			data.right = new FormAttachment(95);
 			previewText.setLayoutData(data);

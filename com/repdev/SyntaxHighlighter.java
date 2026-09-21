@@ -21,8 +21,11 @@ package com.repdev;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.regex.Pattern;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.custom.CaretEvent;
+import org.eclipse.swt.custom.CaretListener;
 import org.eclipse.swt.custom.ExtendedModifyEvent;
 import org.eclipse.swt.custom.ExtendedModifyListener;
 import org.eclipse.swt.custom.LineBackgroundEvent;
@@ -40,7 +43,6 @@ import com.repdev.parser.FunctionLayout;
 import com.repdev.parser.HiddenTextProvider;
 import com.repdev.parser.RepgenParser;
 import com.repdev.parser.Token;
-import com.repdev.parser.Variable;
 import com.repdev.parser.Token.SpecialBackgroundReason;
 
 
@@ -67,11 +69,18 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 	TYPE_DATE = new EStyle(new RGB(255, 0, 0), null, SWT.BOLD), 
 	STRUCT1 = new EStyle(new RGB(255, 0, 255), null), 
 	STRUCT2 = new EStyle(new RGB(255, 128, 255), null), 
-	STRUCT1_INVALID = new EStyle(new RGB(255, 0, 255), new RGB(128, 0, 0), SWT.NONE), 
+	STRUCT1_INVALID = new EStyle(new RGB(255, 0, 255), new RGB(128, 0, 0), SWT.NONE),
 	STRUCT2_INVALID = new EStyle(new RGB(255, 128, 255), new RGB(128, 0, 0), SWT.NONE),
-	TASK = new EStyle(new RGB(64,64,64), null, SWT.BOLD);
+	TASK = new EStyle(new RGB(64,64,64), null, SWT.BOLD),
+	NUMBERS = new EStyle(new RGB(0xB5, 0x6B, 0x00), null);
+
+	private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d+(\\.\\d+)?");
 
 	private static Color FORECOLOR = new Color(Display.getCurrent(), FOREGROUND), BACKCOLOR = new Color(Display.getCurrent(), BACKGROUND), BULLETS = new Color(Display.getCurrent(),new RGB(105,105,105));
+	// Subtle tint of the background for the current line, recomputed per-theme in loadStyle()
+	// rather than a style.xml attribute — a fixed blend toward the foreground looks reasonable
+	// against any bg/fg pair without needing every style file updated for a new tag.
+	private static Color CURRENT_LINE = new Color(Display.getCurrent(), BACKGROUND);
 	private static Font FONT;
 
 	private RepgenParser parser;
@@ -82,6 +91,8 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 	//Custom line background, used by the compare composite interface
 	private int[] customLines = null;
 	private static Color customColor, tokenColor;
+	// Tracks the caret's line for the current-line highlight (normal editing only — compare mode leaves this alone)
+	private int currentLine = -1;
 	
 	
 	static {
@@ -110,9 +121,30 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 			txt.setBackground(new Color(Display.getCurrent(), getRGB(Config.getLiveSymColor())));
 		txt.addExtendedModifyListener(this);
 		txt.addLineStyleListener(this);
-		
+		txt.addLineBackgroundListener(this);
+
+		currentLine = txt.getLineAtOffset(txt.getCaretOffset());
+		txt.addCaretListener(new CaretListener() {
+			public void caretMoved(CaretEvent event) {
+				int newLine = txt.getLineAtOffset(event.caretOffset);
+				if (newLine == currentLine) return;
+				int oldLine = currentLine;
+				currentLine = newLine;
+				redrawLine(oldLine);
+				redrawLine(newLine);
+			}
+		});
+
 		if (FONT != null)
 			txt.setFont(FONT);
+	}
+
+	/** Repaints just one line's background — used to move the current-line highlight without a full redraw. */
+	private void redrawLine(int line) {
+		if (txt.isDisposed() || line < 0 || line >= txt.getLineCount())
+			return;
+		int y = txt.getLinePixel(line);
+		txt.redraw(0, y, txt.getClientArea().width, txt.getLineHeight(txt.getOffsetAtLine(line)), false);
 	}
 
 	/**
@@ -170,12 +202,12 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 		// every theme switch (this runs each time the user changes the editor theme in
 		// OptionsShell).
 		Color oldForecolor = FORECOLOR, oldBackcolor = BACKCOLOR, oldCustomColor = customColor,
-				oldTokenColor = tokenColor, oldBullets = BULLETS;
+				oldTokenColor = tokenColor, oldBullets = BULLETS, oldCurrentLine = CURRENT_LINE;
 		EStyle oldNormal = NORMAL, oldComments = COMMENTS, oldVariables = VARIABLES,
 				oldFunctions = FUNCTIONS, oldKeywords = KEYWORDS, oldTypeChar = TYPE_CHAR,
 				oldTypeDate = TYPE_DATE, oldStruct1 = STRUCT1, oldStruct2 = STRUCT2,
 				oldStruct1Invalid = STRUCT1_INVALID, oldStruct2Invalid = STRUCT2_INVALID,
-				oldTask = TASK;
+				oldTask = TASK, oldNumbers = NUMBERS;
 
 		try{
 			Style style = new Style( new File("styles", styleName + ".xml" ));
@@ -199,11 +231,17 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 			STRUCT1_INVALID = new EStyle(style.getColor("struct1Inv", "fgColor"), style.getColor("struct1Inv", "bgColor"), style.getStyle("struct1Inv")); 
 			STRUCT2_INVALID = new EStyle(style.getColor("struct2Inv", "fgColor"), style.getColor("struct2Inv", "bgColor"), style.getStyle("struct2Inv"));
 			TASK = new EStyle(style.getColor("task", "fgColor"), style.getColor("task", "bgColor"), style.getStyle("task"));
+			// No <numbers> tag in any shipped style.xml yet — fall back to a fixed warm
+			// color rather than leaving numeric literals uncolored, but still themeable
+			// per-style going forward if one adds the tag.
+			RGB numbersFg = style.getColor("numbers", "fgColor");
+			NUMBERS = new EStyle(numbersFg != null ? numbersFg : new RGB(0xB5, 0x6B, 0x00), style.getColor("numbers", "bgColor"), style.getStyle("numbers"));
 			try{
 				BULLETS = new Color(Display.getCurrent(),style.getColor("linenumber","fgColor"));
 			}catch(Exception e){
 				BULLETS = new Color(Display.getCurrent(),new RGB(127, 127, 127));
 			}
+			CURRENT_LINE = new Color(Display.getCurrent(), blend(BACKGROUND, FOREGROUND, 0.08));
 		}catch(Exception e){
 			//System.out.println(e.getMessage());
 			System.out.println("Invalid theme using default");
@@ -220,9 +258,10 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 			TYPE_DATE = new EStyle(new RGB(255, 0, 0), null, SWT.BOLD); 
 			STRUCT1 = new EStyle(new RGB(255, 0, 255), null); 
 			STRUCT2 = new EStyle(new RGB(255, 128, 255), null); 
-			STRUCT1_INVALID = new EStyle(new RGB(255, 0, 255), new RGB(128, 0, 0), SWT.NONE); 
+			STRUCT1_INVALID = new EStyle(new RGB(255, 0, 255), new RGB(128, 0, 0), SWT.NONE);
 			STRUCT2_INVALID = new EStyle(new RGB(255, 128, 255), new RGB(128, 0, 0), SWT.NONE);
 			TASK = new EStyle(new RGB(64,64,64), null, SWT.BOLD);
+			NUMBERS = new EStyle(new RGB(0xB5, 0x6B, 0x00), null);
 
 			FORECOLOR = new Color(Display.getCurrent(), FOREGROUND);
 			BACKCOLOR = new Color(Display.getCurrent(), BACKGROUND);
@@ -230,6 +269,7 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 			customColor = new Color(Display.getCurrent(), new RGB(232,242,254));
 			tokenColor = new Color(Display.getCurrent(), new RGB(192,192,192));
 			BULLETS = new Color(Display.getCurrent(),new RGB(127, 127, 127));
+			CURRENT_LINE = new Color(Display.getCurrent(), blend(BACKGROUND, FOREGROUND, 0.08));
 		}
 
 		disposeIfNotNull(oldForecolor);
@@ -237,6 +277,7 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 		disposeIfNotNull(oldCustomColor);
 		disposeIfNotNull(oldTokenColor);
 		disposeIfNotNull(oldBullets);
+		disposeIfNotNull(oldCurrentLine);
 		if (oldNormal != null) oldNormal.dispose();
 		if (oldComments != null) oldComments.dispose();
 		if (oldVariables != null) oldVariables.dispose();
@@ -249,11 +290,20 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 		if (oldStruct1Invalid != null) oldStruct1Invalid.dispose();
 		if (oldStruct2Invalid != null) oldStruct2Invalid.dispose();
 		if (oldTask != null) oldTask.dispose();
+		if (oldNumbers != null) oldNumbers.dispose();
 	}
 
 	private static void disposeIfNotNull(Color c) {
 		if (c != null && !c.isDisposed())
 			c.dispose();
+	}
+
+	/** Blends base toward target by amount (0-1) — used to derive the current-line tint from the theme's own bg/fg pair. */
+	private static RGB blend(RGB base, RGB target, double amount) {
+		int r = (int) (base.red + (target.red - base.red) * amount);
+		int g = (int) (base.green + (target.green - base.green) * amount);
+		int b = (int) (base.blue + (target.blue - base.blue) * amount);
+		return new RGB(r, g, b);
 	}
 
 	private static class EStyle {
@@ -312,6 +362,8 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 			range = TYPE_CHAR.getRange(viewStart, tok.length());
 		else if (tok.inDate())
 			range = TYPE_DATE.getRange(viewStart, tok.length());
+		else if (NUMBER_PATTERN.matcher(tok.getStr()).matches())
+			range = NUMBERS.getRange(viewStart, tok.length());
 		// Validates the token is a Record before the colon
 		else if (tok.getAfter() != null && tok.getAfter().getStr().equals(":")) {
 			if (tok.dbRecordValid())
@@ -330,12 +382,13 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 			range = KEYWORDS.getRange(viewStart, tok.length());
 		else if (RepgenParser.getSpecialvars().contains(tok.getStr()))
 			range = VARIABLES.getRange(viewStart, tok.length());
-		for (int i = 0; i < parser.getLvars().size(); i++){
-			Variable var = parser.getLvars().get(i);
-
-			if (var.getName().equals(tok.getStr()))
-				isVar = true;
-		}
+		// O(1) set lookup instead of a linear scan of every declared variable — this
+		// runs per token on every visible line on every repaint, so it's a hot path.
+		// Also now skipped entirely once an earlier branch above already classified
+		// the token, instead of always running regardless (the old loop ran even
+		// when `range` was already set and its result would just be discarded below).
+		else if (parser.hasLvar(tok.getStr()))
+			isVar = true;
 
 		if (range == null && isVar)
 			range = VARIABLES.getRange(viewStart, tok.length());
@@ -414,15 +467,21 @@ public class SyntaxHighlighter implements ExtendedModifyListener, LineStyleListe
 	public void lineGetBackground(LineBackgroundEvent event) {
 		boolean go = false;
 
-		for( int i : customLines)
-			if( i == txt.getLineAtOffset(event.lineOffset) )
-			{
-				go = true;
-				break;
-			}
+		if (customLines != null)
+			for( int i : customLines)
+				if( i == txt.getLineAtOffset(event.lineOffset) )
+				{
+					go = true;
+					break;
+				}
 
 		if( go ){
 			event.lineBackground = customColor;
+		}
+		// Compare mode (customLines != null) keeps its own diff highlighting instead —
+		// don't also paint the current-line tint over it.
+		else if (customLines == null && txt.getLineAtOffset(event.lineOffset) == currentLine) {
+			event.lineBackground = CURRENT_LINE;
 		}
 	}
 

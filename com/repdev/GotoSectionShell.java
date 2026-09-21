@@ -33,7 +33,6 @@ import org.eclipse.swt.layout.FormAttachment;
 import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Combo;
@@ -84,7 +83,7 @@ public class GotoSectionShell {
 
 		shell.setText("Goto Section/Procedure");
 
-		Group sectionGroup = new Group(shell, SWT.NONE);
+		Section sectionGroup = new Section(shell, SWT.NONE);
 		sectionGroup.setText(" Select Section or Procedure ");
 
 		Label sectionLabel = new Label(sectionGroup, SWT.NONE);

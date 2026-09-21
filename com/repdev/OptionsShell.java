@@ -20,7 +20,6 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.List;
 import org.eclipse.swt.widgets.MessageBox;
@@ -165,7 +164,7 @@ public class OptionsShell {
 		serverOptionsTab.setText("Server Options");
 		serverOptionsTab.setControl(serverOptions);
 		
-		Group serverGroup = new Group(serverOptions, SWT.NONE);
+		Section serverGroup = new Section(serverOptions, SWT.NONE);
 		serverGroup.setText("Symitar Connection Options");
 		FormLayout layout = new FormLayout();
 		layout.marginTop = 5;
@@ -239,7 +238,7 @@ public class OptionsShell {
 			}
 		});
 		
-		Group keepAliveGroup = new Group(serverOptions,SWT.NONE);
+		Section keepAliveGroup = new Section(serverOptions,SWT.NONE);
 		keepAliveGroup.setText("Keep Alive Options (Log out Sym Required)");
 		layout = new FormLayout();
 		layout.marginTop = 5;
@@ -300,7 +299,7 @@ public class OptionsShell {
 		data = new FormData();
 		data.left = new FormAttachment(0);
 		data.right = new FormAttachment(100);
-		data.top = new FormAttachment(serverGroup);
+		data.top = new FormAttachment(serverGroup, 8); // breathing room between stacked sections now that there's no GroupBox border to separate them
 		keepAliveGroup.setLayoutData(data);
 		
 		// align the controls for the server group:
@@ -386,7 +385,7 @@ public class OptionsShell {
 		editorOptionsTab.setText("Editor Options");
 		editorOptionsTab.setControl(editorOptions);
 		
-		Group editorGroup = new Group(editorOptions, SWT.NONE);
+		Section editorGroup = new Section(editorOptions, SWT.NONE);
 		editorGroup.setText("Editor Options");
 		FormLayout layout = new FormLayout();
 		layout.marginTop = 5;
@@ -485,7 +484,7 @@ public class OptionsShell {
 		enableFolding = new Button(editorGroup, SWT.CHECK);
 		enableFolding.setSelection((Config.getFoldingEnabled()));
 
-		Group noErrorCheckGroup = new Group(editorOptions,SWT.NONE);
+		Section noErrorCheckGroup = new Section(editorOptions,SWT.NONE);
 		noErrorCheckGroup.setText("No Error Check for these Files");
 		layout = new FormLayout();
 		layout.marginTop = 5;
@@ -662,7 +661,7 @@ public class OptionsShell {
 		data = new FormData();
 		data.left = new FormAttachment(0);
 		data.right = new FormAttachment(100);
-		data.top = new FormAttachment(editorGroup);
+		data.top = new FormAttachment(editorGroup, 8); // breathing room between stacked sections now that there's no GroupBox border to separate them
 		//data.bottom = new FormAttachment(0);
 		noErrorCheckGroup.setLayoutData(data);
 
@@ -699,7 +698,7 @@ public class OptionsShell {
 		devOptionsTab.setText("Developer");
 		devOptionsTab.setControl(developerOptions);
 		
-		Group devGroup = new Group(developerOptions, SWT.NONE);
+		Section devGroup = new Section(developerOptions, SWT.NONE);
 		devGroup.setText("Developer Options");
 		FormLayout layout = new FormLayout();
 		layout.marginTop = 5;
@@ -717,7 +716,7 @@ public class OptionsShell {
 		devForgetBox.setText("Forget Passwords on exit");
 		devForgetBox.setSelection(RepDevMain.FORGET_PASS_ON_EXIT);
 		
-		Group devBackup = new Group(developerOptions, SWT.NONE);
+		Section devBackup = new Section(developerOptions, SWT.NONE);
 		devBackup.setText("Backup Options");
 		devBackup.setLayout(new GridLayout(2, false));
 		
@@ -745,7 +744,7 @@ public class OptionsShell {
 		data = new FormData();
 		data.left = new FormAttachment(0);
 		data.right = new FormAttachment(100);
-		data.top = new FormAttachment(devGroup);
+		data.top = new FormAttachment(devGroup, 8); // breathing room between stacked sections now that there's no GroupBox border to separate them
 		devBackup.setLayoutData(data);
 	}
 	
@@ -759,7 +758,7 @@ public class OptionsShell {
 		layout.marginBottom = layout.marginTop = layout.marginLeft = layout.marginRight = 5;
 		documentationOptions.setLayout(layout);
 		
-		Group docGroup = new Group(documentationOptions, SWT.NONE);
+		Section docGroup = new Section(documentationOptions, SWT.NONE);
 		docGroup.setText("Add Item");
 		
 		layout = new GridLayout(3,false);

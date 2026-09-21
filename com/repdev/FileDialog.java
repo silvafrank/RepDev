@@ -21,8 +21,12 @@ package com.repdev;
 
 import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.KeyAdapter;
+import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.events.ModifyEvent;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
@@ -51,8 +55,14 @@ public class FileDialog {
 	Text nameText;
 	String dir;
 	enum TABLE_COLUMN{NAME, SIZE, DATE};
-	
-	boolean listLoaded = false;
+
+	/** Full, unfiltered list of files for the current type — fetched once, then filtered client-side as the user types. */
+	ArrayList<SymitarFile> fullFileList = new ArrayList<>();
+	/** fullFileList's names, lower-cased once up front — so filtering on every keystroke isn't re-lowercasing the whole list each time. */
+	ArrayList<String> fullFileNamesLower = new ArrayList<>();
+	/** Per-type cache of the above two, so flipping the type combo back to one already fetched this session is instant instead of a fresh round-trip. */
+	HashMap<FileType, ArrayList<SymitarFile>> listCache = new HashMap<>();
+	HashMap<FileType, ArrayList<String>> lowerCache = new HashMap<>();
 
 	public enum Mode {
 		SAVE, OPEN,
@@ -108,6 +118,13 @@ public class FileDialog {
 		
 		typeCombo.select(0);
 
+		typeCombo.addSelectionListener(new SelectionAdapter() {
+			public void widgetSelected(SelectionEvent e) {
+				loadFullList();
+				filterAndDisplay();
+			}
+		});
+
 		//TODO: Sortable columns
 		table = new Table(shell, (mode == Mode.OPEN ? SWT.MULTI : SWT.SINGLE) | SWT.BORDER | SWT.V_SCROLL | SWT.FULL_SELECTION);
 		table.setLinesVisible(false);
@@ -156,7 +173,7 @@ public class FileDialog {
 				else{
 					table.setSortDirection(table.getSortDirection() == SWT.UP ? SWT.DOWN : SWT.UP);
 				}
-				createList();				
+				filterAndDisplay();
 			}
 		};
 		nameCol.addListener(SWT.Selection, sortListener);
@@ -165,33 +182,51 @@ public class FileDialog {
 
 		nameText = new Text(shell, SWT.SINGLE | SWT.BORDER);
 
+		// Arrow keys browse the (already-filtered, already-selected) results without
+		// leaving the search box or clicking a row first.
+		nameText.addKeyListener(new KeyAdapter() {
+			public void keyPressed(KeyEvent e) {
+				if (e.keyCode == SWT.ARROW_DOWN) {
+					moveSelection(1);
+					e.doit = false;
+				} else if (e.keyCode == SWT.ARROW_UP) {
+					moveSelection(-1);
+					e.doit = false;
+				}
+			}
+		});
+
 		nameText.addSelectionListener(new SelectionAdapter() {
 			public void widgetDefaultSelected(SelectionEvent e) {
- 				createList();
+				if (mode == Mode.OPEN) {
+					openHighlighted();
+					return;
+				}
 
-				if (table.getItemCount() == 1 && !isTemplate()) {
-					if (mode == Mode.SAVE) {
+				if (mode == Mode.SAVE && !isTemplate()) {
+					SymitarFile exact = findExactMatch(nameText.getText().trim());
+
+					if (exact != null) {
 						MessageBox dialog = new MessageBox(shell, SWT.ICON_QUESTION | SWT.OK | SWT.CANCEL);
 						dialog.setText("Confirm Overwrite");
 						dialog.setMessage("This file already exists, are you sure you want to overwrite it?");
 
 						if (dialog.open() == SWT.CANCEL)
 							return;
+
+						files.add(exact);
+						shell.close();
+					} else if (nameText.getText().trim().length() > 0) {
+						createFile();
 					}
-
-					files.add((SymitarFile) (table.getItems()[0].getData()));
-					shell.close();
-				} else if (mode == Mode.SAVE && nameText.getText().trim().length() > 0 && !isTemplate()) {
-					createFile();
 				}
-
 			}
 		});
 
 		nameText.addModifyListener(new ModifyListener() {
 
 			public void modifyText(ModifyEvent e) {
-				listLoaded = false;
+				filterAndDisplay();
 			}
 
 		});
@@ -205,26 +240,22 @@ public class FileDialog {
 
 		ok.addSelectionListener(new SelectionAdapter() {
 			public void widgetSelected(SelectionEvent e) {
-				if (!listLoaded)
-					createList();
-
-				if (mode == Mode.OPEN && table.getSelectionIndex() != -1 ) {
-					for (TableItem cur : table.getSelection())
-						files.add((SymitarFile) cur.getData());
-
-					shell.close();
+				if (mode == Mode.OPEN) {
+					openHighlighted();
 				}
-				
+
 				if( mode == Mode.SAVE){
-					if( table.getSelectionIndex() != -1 ){
+					SymitarFile exact = findExactMatch(nameText.getText().trim());
+
+					if( exact != null ){
 						MessageBox dialog = new MessageBox(shell, SWT.ICON_QUESTION | SWT.OK | SWT.CANCEL);
 						dialog.setText("Confirm Overwrite");
 						dialog.setMessage("This file already exists, are you sure you want to overwrite it?");
 
 						if (dialog.open() == SWT.CANCEL)
 							return;
-						
-						files.add((SymitarFile)table.getSelection()[0].getData());
+
+						files.add(exact);
 						shell.close();
 					}
 					else
@@ -284,13 +315,51 @@ public class FileDialog {
 
 		nameText.setFocus();
 
-		shell.pack();
+		// Fixed, reasonable default — independent of result count, which pack() is not:
+		// pack() sizes from the table's *populated* preferred height, so loading the full
+		// list before open (below) would otherwise stretch the dialog to fit every row.
+		// Long lists scroll instead (table already has SWT.V_SCROLL).
+		shell.setSize(700, 480);
+		shell.layout(true, true);
+
+		// Show the (empty, wait-cursor) shell FIRST, then fetch. The fetch is a real
+		// network round-trip to Symitar — doing it before open() meant the whole
+		// window stayed invisible for that entire wait, which read as a sluggish
+		// double-click. Pumping the queue once forces the just-opened shell to
+		// actually paint before the blocking call below runs on this same thread.
 		shell.open();
+		while (shell.getDisplay().readAndDispatch()) {}
+
+		loadFullList();
+		filterAndDisplay();
 	}
 
 	// TODO: Finish up with other template forms
 	private boolean isTemplate() {
 		return nameText.getText().contains("+");
+	}
+
+	/** Opens whatever's currently highlighted in the results table — shared by Enter-in-search-box and the Open button. */
+	private void openHighlighted() {
+		if (table.getSelectionIndex() == -1)
+			return;
+
+		for (TableItem cur : table.getSelection())
+			files.add((SymitarFile) cur.getData());
+
+		shell.close();
+	}
+
+	/** Moves the table's highlighted row up/down by delta, clamped to the list bounds. */
+	private void moveSelection(int delta) {
+		int count = table.getItemCount();
+		if (count == 0)
+			return;
+
+		int idx = table.getSelectionIndex();
+		idx = Math.max(0, Math.min(count - 1, (idx < 0 ? 0 : idx) + delta));
+		table.setSelection(idx);
+		table.showSelection();
 	}
 	
 	private void createFile(){
@@ -306,125 +375,145 @@ public class FileDialog {
 		}
 	}
 
-	private void createList() {
-		table.removeAll();
-		ArrayList<SymitarFile> fileList = new ArrayList<>();
-		
-		table.setRedraw(false);
+	/**
+	 * Fetches the complete, unfiltered file list for the current type (search "+" = match all).
+	 * Cached per type — switching the type combo back to one already fetched this dialog
+	 * session is instant instead of repeating the (slow, remote) round-trip every time.
+	 */
+	private void loadFullList() {
+		FileType type = FileType.valueOf(typeCombo.getText());
+
+		if (listCache.containsKey(type)) {
+			fullFileList = listCache.get(type);
+			fullFileNamesLower = lowerCache.get(type);
+			return;
+		}
+
 		shell.setCursor(shell.getDisplay().getSystemCursor(SWT.CURSOR_WAIT));
-		
-		try{
-			if( dir == null ){
+
+		try {
+			if (dir == null) {
 				SymitarSession session = RepDevMain.SYMITAR_SESSIONS.get(sym);
-				fileList = session.getFileList(FileType.valueOf(typeCombo.getText()), nameText.getText());
-			}
-			else{
-				fileList = Util.getFileList(dir, nameText.getText());
-			}
-			
-			// If the table sort column and direction has not been set, set them to default.
-			if(table.getSortColumn() == null){
-				table.setSortColumn(table.getColumn(0));
-				table.setSortDirection(SWT.UP);
-			}
-			
-			// Get the current sort column to pass into the sortFileList method.
-			TABLE_COLUMN col;
-			if(table.getSortColumn().getText().equalsIgnoreCase("size")){
-				col = TABLE_COLUMN.SIZE;
-			}
-			else if(table.getSortColumn().getText().equalsIgnoreCase("date")){
-				col = TABLE_COLUMN.DATE;
-			}
-			else{
-				col = TABLE_COLUMN.NAME;
-			}
-			
-			// Sort the list prior to populating the table.
-			fileList = sortFileList(fileList, col, table.getSortDirection());
-			// Populate the table.
-			for (SymitarFile cur : fileList) {
-				TableItem item = new TableItem(table, SWT.NONE);
-				item.setText(0, cur.getName());
-				
-				if( cur.getType() == FileType.REPGEN )
-					if( cur.getOnDemand() ) 
-						item.setImage(0, RepDevMain.smallRepGenDemandImage);
-					else
-						item.setImage(0, RepDevMain.smallRepGenImage);
-				
-				else if( cur.getType() == FileType.DATA )
-					item.setImage(0, RepDevMain.smallDataImage);
-				else
-					item.setImage(0, RepDevMain.smallFileImage);
-				
-				item.setText(1, Util.getByteStr(cur.getSize()));
-				item.setText(2,DateFormat.getDateTimeInstance().format(cur.getModified()));
-				item.setData(cur);
+				fullFileList = session.getFileList(type, "+");
+			} else {
+				fullFileList = Util.getFileList(dir, "+");
 			}
 		}
-		catch(Exception e){
+		catch (Exception e) {
 			e.printStackTrace();
 		}
-		finally{
-			table.setRedraw(true);
+		finally {
 			shell.setCursor(shell.getDisplay().getSystemCursor(SWT.CURSOR_ARROW));
 		}
 
+		fullFileNamesLower = new ArrayList<>(fullFileList.size());
+		for (SymitarFile cur : fullFileList)
+			fullFileNamesLower.add(cur.getName().toLowerCase());
+
+		listCache.put(type, fullFileList);
+		lowerCache.put(type, fullFileNamesLower);
+	}
+
+	/**
+	 * Filters the cached full list against the search box — sorts, and repopulates the table.
+	 * Runs live on every keystroke since it's just filtering an in-memory list.
+	 *
+	 * Matching splits the query into whitespace-separated tokens and requires each one to
+	 * appear somewhere in the name (in any order) — so "estatement cleanup" finds
+	 * "MSVCS.ESTATEMENT.CLEANUP" without needing the exact dotted name or word order.
+	 */
+	private void filterAndDisplay() {
+		String[] tokens = nameText.getText().trim().toLowerCase().split("\\s+");
+
+		ArrayList<SymitarFile> fileList = new ArrayList<>();
+		for (int i = 0; i < fullFileList.size(); i++)
+			if (matchesAllTokens(fullFileNamesLower.get(i), tokens))
+				fileList.add(fullFileList.get(i));
+
+		table.setRedraw(false);
+		table.removeAll();
+
+		// If the table sort column and direction has not been set, set them to default.
+		if(table.getSortColumn() == null){
+			table.setSortColumn(table.getColumn(0));
+			table.setSortDirection(SWT.UP);
+		}
+
+		// Get the current sort column to pass into the sortFileList method.
+		TABLE_COLUMN col;
+		if(table.getSortColumn().getText().equalsIgnoreCase("size")){
+			col = TABLE_COLUMN.SIZE;
+		}
+		else if(table.getSortColumn().getText().equalsIgnoreCase("date")){
+			col = TABLE_COLUMN.DATE;
+		}
+		else{
+			col = TABLE_COLUMN.NAME;
+		}
+
+		// Sort the list prior to populating the table.
+		fileList = sortFileList(fileList, col, table.getSortDirection());
+		// Populate the table.
+		DateFormat dateFormat = DateFormat.getDateTimeInstance(); // hoisted out of the loop below — building one per row per keystroke was pure waste
+		for (SymitarFile cur : fileList) {
+			TableItem item = new TableItem(table, SWT.NONE);
+			item.setText(0, cur.getName());
+
+			if( cur.getType() == FileType.REPGEN )
+				if( cur.getOnDemand() )
+					item.setImage(0, RepDevMain.smallRepGenDemandImage);
+				else
+					item.setImage(0, RepDevMain.smallRepGenImage);
+
+			else if( cur.getType() == FileType.DATA )
+				item.setImage(0, RepDevMain.smallDataImage);
+			else
+				item.setImage(0, RepDevMain.smallFileImage);
+
+			item.setText(1, Util.getByteStr(cur.getSize()));
+			item.setText(2, dateFormat.format(cur.getModified()));
+			item.setData(cur);
+		}
+
+		table.setRedraw(true);
+
 		if (table.getItemCount() > 0)
 			table.select(0);
+	}
 
-		listLoaded = true;
+	/** True if every non-empty whitespace-separated search token appears somewhere in nameLower, in any order. */
+	private boolean matchesAllTokens(String nameLower, String[] tokens) {
+		for (String token : tokens)
+			if (!token.isEmpty() && !nameLower.contains(token))
+				return false;
+		return true;
+	}
+
+	/** Exact (case-insensitive) filename match against the full list — used to tell whether Save would overwrite an existing file. */
+	private SymitarFile findExactMatch(String name) {
+		for (SymitarFile cur : fullFileList)
+			if (cur.getName().equalsIgnoreCase(name))
+				return cur;
+		return null;
 	}
 	
 	/**
-	 * This Method is designed to sort an ArrayList of SymitarFile, given the sort column and direction.
-	 * If the sort column is not size or date, it will be sorted by name.
-	 * @param ArrayList&lt;SymitarFile&gt;
+	 * Sorts an ArrayList of SymitarFile by the given column/direction.
+	 * If the sort column is not size or date, it sorts by name.
 	 * @param sortColumn column to sort by
-	 * @param sortDirection sort ascending or decending.
-	 * @return ArrayList&lt;SymitarFile&gt;
+	 * @param sortDirection sort ascending or descending.
 	 */
 	public ArrayList<SymitarFile> sortFileList(ArrayList<SymitarFile> fileList, TABLE_COLUMN sortColumn, int sortDirection){
-		for (int i = 1; i < fileList.size(); i++) {
-			SymitarFile file1 = fileList.get(i);
-			int diff;
-			for (int j = 0; j < i; j++){
-				SymitarFile file2 = fileList.get(j);
-				// Compare the File Info
-				if(sortColumn == TABLE_COLUMN.SIZE){
-					if(file1.getSize() > file2.getSize())
-						diff = 1;
-					else if(file1.getSize() < file2.getSize())
-						diff = -1;
-					else diff = 0;
-				}
-				else if(sortColumn == TABLE_COLUMN.DATE){
-					diff = file1.getModified().compareTo(file2.getModified());
-				}
-				else{
-					diff = file1.getName().compareTo(file2.getName());
-				}
-				
-				// Shift in array
-				if(sortDirection != SWT.DOWN){
-					if(diff < 0){
-						fileList.remove(i);
-						fileList.add(j, file1);
-						break;
-					}
-				}
-				else{
-					if(diff > 0){
-						fileList.remove(i);
-						fileList.add(j, file1);
-						break;
-					}
-				}
-			}
-		}
+		Comparator<SymitarFile> cmp;
+		if (sortColumn == TABLE_COLUMN.SIZE)
+			cmp = Comparator.comparingLong(SymitarFile::getSize);
+		else if (sortColumn == TABLE_COLUMN.DATE)
+			cmp = Comparator.comparing(SymitarFile::getModified);
+		else
+			cmp = Comparator.comparing(SymitarFile::getName);
+
+		fileList.sort(sortDirection == SWT.DOWN ? cmp.reversed() : cmp);
 		return fileList;
-            
 	}
 
 	public ArrayList<SymitarFile> open() {

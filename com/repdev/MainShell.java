@@ -27,10 +27,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.CTabFolder;
@@ -70,6 +68,7 @@ import org.eclipse.swt.events.ShellEvent;
 import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Cursor;
 import org.eclipse.swt.graphics.Font;
+import org.eclipse.swt.graphics.FontData;
 import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.ImageData;
@@ -108,10 +107,6 @@ import org.eclipse.swt.widgets.ToolBar;
 import org.eclipse.swt.widgets.ToolItem;
 import org.eclipse.swt.widgets.Tree;
 import org.eclipse.swt.widgets.TreeItem;
-import org.w3c.dom.Document;
-import org.w3c.dom.NamedNodeMap;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 
 import com.repdev.parser.Error;
 import com.repdev.parser.RepgenParser;
@@ -133,9 +128,19 @@ import com.repdev.parser.Task;
 
 public class MainShell {
 	private static final int MIN_COL_WIDTH = 75, MIN_COMP_SIZE = 65;
+	private static final int BIG_TREE_ROW_HEIGHT = 40, BIG_TREE_ICON_SIZE = 28;
 	private CTabFolder mainfolder;
 	private Display display;
 	private Tree tree;
+	// Current-sym indicator embedded in the (always-visible, CoolBar-hosted) explorer
+	// toolbar — see updateSymIndicator(). Lives here rather than in the sidebar tree
+	// itself so it's still visible when the sidebar is collapsed.
+	private ToolItem symIndicatorItem;
+	// Cache of icons scaled up to BIG_TREE_ICON_SIZE for top-level tree rows
+	// (see applyBigItemStyle) — keyed by the original small Image so each
+	// source icon is only scaled once regardless of how many syms/folders use it.
+	private final HashMap<Image, Image> bigIconCache = new HashMap<>();
+	private Font bigTreeFont;
 	private Table tblErrors, tblTasks;
 	private FindReplaceShell findReplaceShell;
 	private final int MAX_RECENTS = 5;
@@ -177,9 +182,9 @@ public class MainShell {
 	final Composite main = new Composite(right, SWT.NONE);
 	final FormData frmSashVert = new FormData();
 	final FormData frmSashHoriz = new FormData();
+	final FormData frmTree = new FormData();
 	
 	private void createShell() {
-		int leftPercent = 20, bottomPercent = 20;
 		shell.setText(RepDevMain.NAMESTR);
 		shell.setImage(RepDevMain.smallProgramIcon);
 		if(Config.getWindowSize() != null)
@@ -209,6 +214,12 @@ public class MainShell {
 
 		// Create the CoolBar
 		coolBar = new CoolBar(shell, SWT.NONE);
+		// The explorer and editor toolbars are two separate CoolItems, which by
+		// default each get a draggable gripper handle — the "seam" that made them
+		// read as two different mini-toolbars glued together instead of one
+		// consistent row. Locking removes the gripper/reordering affordance; nobody
+		// was rearranging these anyway.
+		coolBar.setLocked(true);
 		FormData cBarData = new FormData();
 		cBarData.top = new FormAttachment(0);
 		cBarData.left = new FormAttachment(0);
@@ -244,10 +255,10 @@ public class MainShell {
 
 		
 		frmSashVert.top = new FormAttachment(coolBar);
-//		if(Config.getSashVSize() != 0)
-			frmSashVert.left = new FormAttachment(0,Config.getSashVSize());
-//		else
-//			frmSashVert.left = new FormAttachment(leftPercent);
+		// Default wide enough to show full sym/project/file names without eliding;
+		// scales with ICON_SCALE so it stays proportionate on high-DPI screens.
+		// Once the user drags the sash, their size wins (persisted via Config.setSashVSize).
+		frmSashVert.left = new FormAttachment(0, Config.getSashVSize() != 0 ? Config.getSashVSize() : 260 * RepDevMain.ICON_SCALE / 100);
 		frmSashVert.bottom = new FormAttachment(statusBar);
 		sashVert.setLayoutData(frmSashVert);
 
@@ -314,6 +325,8 @@ public class MainShell {
 		shell.setMinimumSize(3 * MIN_COMP_SIZE, 3 * MIN_COMP_SIZE);
 		shell.setMaximized(Config.getWindowMaximized());
 		//TEST InputShell.getInput(shell, "Test Prompt", "This will change all of the saved AIX Password for a server.     \n\nEnter the Server\n\n", "", false);
+
+		updateBottomVisibility(); // starts hidden — nothing to report yet
 	}
 
 	public Object openFile(Sequence seq, int sym) {
@@ -413,6 +426,10 @@ public class MainShell {
 				 */);
 				//EditorCompositeList.add((EditorComposite)editor);
 			}
+			// Tabs are created after the main shell's initial Show event (which is
+			// what the app-wide dark-theme filter listens for), so each new one
+			// needs the palette applied directly.
+			if (Config.getDarkMode()) UITheme.apply(editor);
 
 			// If anything goes wrong creating the Editor, we want to fail here
 			// It will dispose of the item to indicate this fault.
@@ -489,6 +506,16 @@ public class MainShell {
 			SymitarFile file = (SymitarFile) cur.getData();
 			int sym = ((Project) cur.getParentItem().getData()).getSym();
 			openFile(file);
+		} else if (cur.getData() instanceof Integer) {
+			// Double-clicking a sym jumps straight to "Open Existing" for it — same
+			// action, same connected-only guard as the tree's context-menu item —
+			// instead of just expanding/collapsing, which the twisty already does.
+			int sym = (Integer) cur.getData();
+			SymitarSession session = RepDevMain.SYMITAR_SESSIONS.get(sym);
+			if (session != null && session.isConnected())
+				showFileOpenMenu();
+			else
+				doTree(cur);
 		} else {
 			doTree(cur);
 		}
@@ -517,7 +544,7 @@ public class MainShell {
 
 			for (TreeItem current : tree.getItems()) {
 				if (current.getData() instanceof Integer && ((Integer) current.getData()) == sym) {
-					current.setImage(RepDevMain.smallSymOnImage);
+					applyBigItemStyle(current, RepDevMain.smallSymOnImage);
 					exists = true;
 				}
 			}
@@ -525,9 +552,10 @@ public class MainShell {
 			if (!exists) {
 				TreeItem item = new TreeItem(tree, SWT.NONE);
 				item.setText("Sym " + sym);
-				item.setImage(RepDevMain.smallSymOnImage);
+				applyBigItemStyle(item, RepDevMain.smallSymOnImage);
 				item.setData(sym);
 				new TreeItem(item, SWT.NONE).setText("Loading...");
+				updateTreeHeight();
 			}
 		}
 	}
@@ -548,12 +576,39 @@ public class MainShell {
 			if (!exists) {
 				TreeItem item = new TreeItem(tree, SWT.NONE);
 				item.setText(dir.substring(dir.lastIndexOf("\\")));
-				item.setImage(RepDevMain.smallFolderImage);
+				applyBigItemStyle(item, RepDevMain.smallFolderImage);
 				item.setData(dir);
 				new TreeItem(item, SWT.NONE).setText("Loading...");
 				Config.getMountedDirs().add(dir);
+				updateTreeHeight();
 			}
 		}
+	}
+
+	/** Bold + a couple points larger than whatever the tree's own default font is. */
+	private Font deriveBigFont(Font base) {
+		FontData[] fd = base.getFontData();
+		for (FontData d : fd) {
+			d.setStyle(SWT.BOLD);
+			d.setHeight(d.getHeight() + 2);
+		}
+		return new Font(display, fd);
+	}
+
+	/** Scales an icon up to BIG_TREE_ICON_SIZE, caching by source Image so repeats are free. */
+	private Image bigIcon(Image src) {
+		Image big = bigIconCache.get(src);
+		if (big == null || big.isDisposed()) {
+			big = new Image(display, src.getImageData().scaledTo(BIG_TREE_ICON_SIZE, BIG_TREE_ICON_SIZE));
+			bigIconCache.put(src, big);
+		}
+		return big;
+	}
+
+	/** Applies the "big button" look (bold font, scaled-up icon) to a top-level sym/folder row. */
+	private void applyBigItemStyle(TreeItem item, Image icon) {
+		item.setFont(bigTreeFont);
+		item.setImage(bigIcon(icon));
 	}
 
 	private void removeSym(TreeItem currentItem) {
@@ -807,34 +862,93 @@ public class MainShell {
 
 		final ToolItem addProj = new ToolItem(toolbar, SWT.PUSH);
 		addProj.setImage(RepDevMain.smallProjectAddImage);
+		addProj.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallProjectAddImage));
 		addProj.setToolTipText("Create a new project in the selected Sym.");
 		addProj.setEnabled(false);
 
 		final ToolItem newFile = new ToolItem(toolbar, SWT.PUSH);
 		newFile.setImage(RepDevMain.smallFileAddImage);
+		newFile.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallFileAddImage));
 		newFile.setToolTipText("Create a new file in your current project.");
 		newFile.setEnabled(false);
 
 		final ToolItem remItem = new ToolItem(toolbar, SWT.PUSH);
 		remItem.setImage(RepDevMain.smallDeleteImage);
+		remItem.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallDeleteImage));
 		remItem.setToolTipText("Remove the selected explorer items.");
 		remItem.setEnabled(false);
 
 		final ToolItem importFile = new ToolItem(toolbar, SWT.PUSH);
 		importFile.setImage(RepDevMain.smallImportImage);
+		importFile.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallImportImage));
 		importFile.setToolTipText("Import Existing Files to your current project.");
 		importFile.setEnabled(false);
 
 		final ToolItem openFileToolbar = new ToolItem(toolbar, SWT.PUSH);
 		openFileToolbar.setImage(RepDevMain.smallFileOpenImage);
+		openFileToolbar.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallFileOpenImage));
 		openFileToolbar.setToolTipText("Open a file on the symitar server that's not in a project");
 		openFileToolbar.setEnabled(false);
+
+		new ToolItem(toolbar, SWT.SEPARATOR);
+
+		// Current-sym indicator, a real toolbar button (same PUSH style as Dark
+		// Mode below) instead of a plain Label wrapped into a SEPARATOR item —
+		// that got none of the native button padding/chrome the other items get,
+		// which is what made it look out of place next to Dark Mode. Grouped
+		// right after the tree actions — "which sym context am I in" is the more
+		// fundamental piece of state, so it comes before the theme toggle. Lives in
+		// the explorer toolbar (CoolBar-hosted, not part of the collapsible sidebar
+		// composite) specifically so it stays visible when the sidebar is toggled
+		// off via the fullscreen/panel-collapse button. Not actionable (no
+		// listener) - it's a status readout, same as before.
+		symIndicatorItem = new ToolItem(toolbar, SWT.PUSH);
+		symIndicatorItem.setImage(RepDevMain.smallSymOnImage);
+		symIndicatorItem.setText("No Sym");
+		symIndicatorItem.setToolTipText("The sym your current selection/open file belongs to");
+
+		new ToolItem(toolbar, SWT.SEPARATOR);
+
+		// Plain PUSH, not CHECK: a checked ToolItem stays rendered in its sunken/
+		// highlighted "pressed" chrome for as long as it's selected — permanently,
+		// once dark mode is on — and that native highlight box doesn't reflect the
+		// app's own theme, so it just looks like a stuck-down button. The label
+		// below already says what it does; nothing else needs to persist visually.
+		final ToolItem darkModeToggle = new ToolItem(toolbar, SWT.PUSH);
+		darkModeToggle.setImage(RepDevMain.smallDarkModeImage);
+		darkModeToggle.setText("Dark Mode"); // a lone moon icon this small was too easy to miss/mistake — label it
+		darkModeToggle.setToolTipText("Toggle the dark UI theme");
+		darkModeToggle.addSelectionListener(new SelectionAdapter() {
+			public void widgetSelected(SelectionEvent e) {
+				boolean dark = !Config.getDarkMode();
+				Config.setDarkMode(dark);
+				UITheme.setTheme(shell, dark);
+			}
+		});
 
 		toolbar.setData("explorer");
 		addBar(toolbar);
 		toolbar.pack();
 
-		tree = new Tree(self, SWT.NONE | SWT.BORDER | SWT.MULTI);
+		// FULL_SELECTION so the highlight bar spans the sidebar's full width on
+		// the (now much bigger) top-level rows, instead of hugging just the
+		// icon+text like a dense list.
+		tree = new Tree(self, SWT.NONE | SWT.BORDER | SWT.MULTI | SWT.FULL_SELECTION);
+
+		// Top-level rows (syms / mounted folders) get a taller row + bigger icon
+		// + bold font so the sidebar reads as a handful of big buttons instead
+		// of a dense one-line list — it's got the width to spare. Nested rows
+		// (projects/files under each sym) are untouched, still compact.
+		// Native SWT still handles selection/drag-drop/context menus/lazy
+		// loading exactly as before; this only changes how top-level rows are
+		// measured, imaged and fonted, not the tree's data model.
+		bigTreeFont = deriveBigFont(tree.getFont());
+		tree.addListener(SWT.MeasureItem, new Listener() {
+			public void handleEvent(Event event) {
+				if (((TreeItem) event.item).getParentItem() == null)
+					event.height = Math.max(event.height, BIG_TREE_ROW_HEIGHT);
+			}
+		});
 
 		// Configure drag + drop
 		Transfer[] types = new Transfer[] { TextTransfer.getInstance() };
@@ -1153,7 +1267,7 @@ public class MainShell {
 			String symdesc = "";
 			symdesc = (RepDevMain.SESSION_INFO.get(sym).getDescription().length() != 0 ? " - " + RepDevMain.SESSION_INFO.get(sym).getDescription() : "");
 			item.setText("Sym " + sym + symdesc);
-			item.setImage(RepDevMain.smallSymImage);
+			applyBigItemStyle(item, RepDevMain.smallSymImage);
 			item.setData(sym);
 			new TreeItem(item, SWT.NONE).setText("Loading...");
 		}
@@ -1161,7 +1275,7 @@ public class MainShell {
 		for (String dir : Config.getMountedDirs()) {
 			TreeItem item = new TreeItem(tree, SWT.NONE);
 			item.setText(dir.substring(dir.lastIndexOf("\\")));
-			item.setImage(RepDevMain.smallFolderImage);
+			applyBigItemStyle(item, RepDevMain.smallFolderImage);
 			item.setData(dir);
 			new TreeItem(item, SWT.NONE).setText("Loading...");
 		}
@@ -1178,21 +1292,7 @@ public class MainShell {
 		newFreeFile.setText("New File");
 		newFreeFile.addSelectionListener(new SelectionAdapter() {
 			public void widgetSelected(SelectionEvent e) {
-				FileDialog dialog;
-
-				if (isCurrentItemLocal())
-					dialog = new FileDialog(shell, FileDialog.Mode.SAVE, getCurrentTreeDir());
-				else
-					dialog = new FileDialog(shell, FileDialog.Mode.SAVE, getCurrentTreeSym());
-
-				ArrayList<SymitarFile> files = dialog.open();
-
-				if (files.size() > 0) {
-					SymitarFile file = files.get(0);
-
-					file.saveFile("");
-					openFile(file);
-				}
+				showNewFileDialog();
 			}
 		});
 
@@ -1671,7 +1771,7 @@ public class MainShell {
 					if (RepDevMain.SYMITAR_SESSIONS.get(sym).isConnected()) {
 						if(((DirectSymitarSession)RepDevMain.SYMITAR_SESSIONS.get(sym)).keepAliveActive()) ProjectManager.saveProjects(sym);
 						RepDevMain.SYMITAR_SESSIONS.get(sym).disconnect();
-						currentItem.setImage(RepDevMain.smallSymImage);
+						applyBigItemStyle(currentItem, RepDevMain.smallSymImage);
 						currentItem.setExpanded(false);
 						currentItem.removeAll();
 
@@ -1853,7 +1953,7 @@ public class MainShell {
 								});
 
 								return;
-							} else { root.setImage(RepDevMain.smallSymOnImage); }
+							} else { applyBigItemStyle(root, RepDevMain.smallSymOnImage); }
 						}
 					}
 					ArrayList<Project> projects = new ArrayList<>();
@@ -1878,6 +1978,14 @@ public class MainShell {
 						item.setData(file);
 					}
 				}
+
+				updateTreeHeight();
+			}
+		});
+
+		tree.addListener(SWT.Collapse, new Listener() {
+			public void handleEvent(Event e) {
+				updateTreeHeight();
 			}
 		});
 
@@ -1885,6 +1993,7 @@ public class MainShell {
 			public void handleEvent(Event e) {
 				TreeItem[] selection = tree.getSelection();
 
+				updateSymIndicator();
 				remItem.setEnabled(selection.length != 0);
 
 				if (selection.length != 1) {
@@ -1968,12 +2077,89 @@ public class MainShell {
 		frmToolbar.right = new FormAttachment(100);
 		toolbar.setLayoutData(frmToolbar);
 
-		FormData frmTree = new FormData();
+		// Always-visible reference for the shortcuts people forget they have.
+		// Anchored directly below the tree (see updateTreeHeight()) instead of
+		// pinned to the bottom of the sidebar, so it doesn't leave a dead gap
+		// above it when the tree has only a few rows. This exact list is what's
+		// wired up in RepDevMain#createGlobalHotkeys and EditorComposite's key
+		// listener — keep it in sync with those if either changes.
+		Label shortcutsSep = new Label(self, SWT.SEPARATOR | SWT.HORIZONTAL);
+
+		Label shortcutsHeader = new Label(self, SWT.NONE);
+		shortcutsHeader.setText("SHORTCUTS");
+		shortcutsHeader.setForeground(display.getSystemColor(SWT.COLOR_DARK_GRAY));
+		// UITheme's generic recursion would otherwise flatten this back to the same
+		// color as the list below it (dark mode) or pure black (light mode, since
+		// unapply() resets foreground to the OS default) on every toggle — this
+		// marker tells it to keep this one label deliberately muted in both themes.
+		shortcutsHeader.setData("uitheme-muted", Boolean.TRUE);
+
+		Label shortcutsBody = new Label(self, SWT.NONE);
+		// Small monospace font, one line per key combo AND per description
+		// (rather than side by side), same as before.
+		shortcutsBody.setFont(new Font(display, "Consolas", 8, SWT.NORMAL));
+		shortcutsBody.setText(
+			"Ctrl+T\n  Open File\n" +
+			"Ctrl+N\n  New File\n" +
+			"Ctrl+S\n  Save\n" +
+			"Ctrl+Shift+S\n  Save All\n" +
+			"Ctrl+F\n  Find/Replace\n" +
+			"Ctrl+R\n  Run Report\n" +
+			"Ctrl+L\n  Go to Line\n" +
+			"Ctrl+W\n  Close Tab\n" +
+			"Ctrl+Shift+F\n  Toggle Panels\n" +
+			"Ctrl+Shift+O\n  Options"
+		);
+
+		FormData frmShortcutsSep = new FormData();
+		frmShortcutsSep.left = new FormAttachment(0);
+		frmShortcutsSep.right = new FormAttachment(100);
+		frmShortcutsSep.top = new FormAttachment(tree, 10);
+		frmShortcutsSep.height = 2; // an unconstrained SWT.SEPARATOR reports a surprisingly tall natural size
+		shortcutsSep.setLayoutData(frmShortcutsSep);
+
+		FormData frmShortcutsHeader = new FormData();
+		frmShortcutsHeader.left = new FormAttachment(0, 8);
+		frmShortcutsHeader.top = new FormAttachment(shortcutsSep, 8);
+		shortcutsHeader.setLayoutData(frmShortcutsHeader);
+
+		FormData frmShortcutsBody = new FormData();
+		frmShortcutsBody.left = new FormAttachment(0, 8);
+		frmShortcutsBody.right = new FormAttachment(100, -4);
+		frmShortcutsBody.top = new FormAttachment(shortcutsHeader, 6);
+		shortcutsBody.setLayoutData(frmShortcutsBody);
+
+		// Tree hugs its own visible-row height (see updateTreeHeight()) instead
+		// of stretching to fill the sidebar - any leftover space now falls below
+		// shortcutsBody, at the bottom of the sidebar, rather than being
+		// sandwiched between the tree and SHORTCUTS.
 		frmTree.top = new FormAttachment(toolbar);
 		frmTree.left = new FormAttachment(0);
 		frmTree.right = new FormAttachment(100);
-		frmTree.bottom = new FormAttachment(100);
 		tree.setLayoutData(frmTree);
+		updateTreeHeight();
+	}
+
+	/**
+	 * Sizes the tree to hug its currently-visible rows instead of stretching
+	 * to fill the sidebar, so SHORTCUTS sits right under it instead of glued
+	 * to the window's bottom edge with a dead gap in between. Clamped so a
+	 * deeply expanded tree still leaves the shortcuts block visible.
+	 */
+	private void updateTreeHeight() {
+		int rows = Math.max(3, Math.min(16, countVisibleRows(tree.getItems())));
+		frmTree.height = rows * tree.getItemHeight() + 2 * tree.getBorderWidth() + 4;
+		left.layout();
+	}
+
+	private int countVisibleRows(TreeItem[] items) {
+		int count = 0;
+		for (TreeItem item : items) {
+			count++;
+			if (item.getExpanded())
+				count += countVisibleRows(item.getItems());
+		}
+		return count;
 	}
 
 	public void showFileOpenMenu(){
@@ -1987,6 +2173,25 @@ public class MainShell {
 
 		for (SymitarFile file : dialog.open())
 			openFile(file);
+	}
+
+	/** New blank file in the currently-selected sym/dir — same as the tree's "New File" menu item. */
+	public void showNewFileDialog(){
+		FileDialog dialog;
+
+		if (isCurrentItemLocal())
+			dialog = new FileDialog(shell, FileDialog.Mode.SAVE, getCurrentTreeDir());
+		else
+			dialog = new FileDialog(shell, FileDialog.Mode.SAVE, getCurrentTreeSym());
+
+		ArrayList<SymitarFile> files = dialog.open();
+
+		if (files.size() > 0) {
+			SymitarFile file = files.get(0);
+
+			file.saveFile("");
+			openFile(file);
+		}
 	}
 
 	private boolean handleRenameItem(TreeItem item, String newName) {
@@ -2129,6 +2334,8 @@ public class MainShell {
 			else
 				lastResult = removeFile(cur, lastResult);
 		}
+
+		updateTreeHeight();
 	}
 
 	protected void compare() {
@@ -2234,19 +2441,25 @@ public class MainShell {
 		statusBarData.left = new FormAttachment(0);
 		statusBarData.right = new FormAttachment(100);
 		statusBarData.bottom = new FormAttachment(100);
-		statusBarData.height = 16;
+		// No fixed height: a hardcoded 16px clipped the label text once the system
+		// font (which scales with display DPI) rendered taller than that. Let the
+		// bar size to its labels' actual preferred height instead.
 		statusBar.setLayoutData(statusBarData);
 
 		final Label verLabel = new Label(statusBar, SWT.NONE);
 		verLabel.setText("RepDev " + RepDevMain.VERSION + " ");
-		verLabel.setSize(100, 16);
 		FormData data = new FormData();
 		data.left = new FormAttachment(0);
 		verLabel.setLayoutData(data);
 
-		Label sep1 = new Label(statusBar, SWT.SEPARATOR);
+		Label sep1 = new Label(statusBar, SWT.SEPARATOR | SWT.VERTICAL);
 		data = new FormData();
 		data.left = new FormAttachment(verLabel);
+		// An unoriented separator's natural computeSize on this platform is 64px tall
+		// (vs. ~25px for the text labels either side of it) and, unconstrained, that's
+		// what the status bar sized itself to once its own fixed height was removed
+		// above — hence the big blank strip. Pin it to match the text instead.
+		data.height = 18;
 		sep1.setLayoutData(data);
 
 		lineColumn = new Label(statusBar, SWT.NONE);
@@ -2459,21 +2672,6 @@ public class MainShell {
 		
 	}
 	// Draw Rectangle Around Destination Tab End
-	public static Color HextoColor(String hex) {
-		if (hex == null || hex.equals("")) {return null;}
-		hex = hex.replaceAll("#", "");
-		
-		while (hex.length() < 6) {
-			hex = "0" + hex;
-		}
-		
-		String red = "0x"+hex.substring(0, 2);
-		String green = "0x"+hex.substring(2, 4);
-		String blue = "0x"+hex.substring(4, 6);
-		return new Color(null, Integer.decode(red).intValue(), Integer.decode(green).intValue(), Integer.decode(blue).intValue() );
-		//return new RGB(Integer.decode(red).intValue(), Integer.decode(green).intValue(), Integer.decode(blue).intValue());
-	}
-	Color titleForeColor = null, titleBackColor1 = null, titleBackColor2 = null;
 	private void createEditorPane(Composite self) {
 		self.setLayout(new FillLayout());
 		mainfolder = new CTabFolder(self,  SWT.TOP | SWT.BORDER);
@@ -2484,32 +2682,18 @@ public class MainShell {
 		Menu tabContextMenu = new Menu(mainfolder);
 		mainfolder.setMenu(tabContextMenu);
 
-		// XP Theme Color Tabs With Gradient start
-		  try {
-				  File file = new File("styles", Config.getStyle() + ".xml");
-				  DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-				  DocumentBuilder db = dbf.newDocumentBuilder();
-				  Document doc = db.parse(file);
-				  doc.getDocumentElement().normalize();
-				  NodeList nodeLst = doc.getElementsByTagName("tabStyle");
-				  if(nodeLst.getLength() > 0){
-					  NamedNodeMap attributes = nodeLst.item(0).getAttributes();
-					  titleForeColor = HextoColor(attributes.getNamedItem("fgColor").getTextContent());
-					  titleBackColor1 = HextoColor(attributes.getNamedItem("bgcolor1").getTextContent());
-					  titleBackColor2 = HextoColor(attributes.getNamedItem("bgcolor2").getTextContent());
-				  }
-			  } catch (Exception e) {
-				  e.printStackTrace();
-			  }
-			  if(titleForeColor == null || titleBackColor1 == null || titleBackColor2 == null){
-				titleForeColor = display.getSystemColor(SWT.COLOR_TITLE_FOREGROUND);
-				titleBackColor1 = display.getSystemColor(SWT.COLOR_TITLE_BACKGROUND);
-				titleBackColor2 = display.getSystemColor(SWT.COLOR_TITLE_BACKGROUND_GRADIENT);
-			  }
-		mainfolder.setSelectionForeground(titleForeColor);
-		mainfolder.setSelectionBackground(new Color[] { titleBackColor1,titleBackColor2 }, new int[] { 100 }, true);
-		//  XP Theme Color Tabs With Gradient End
-		
+		// Removed the old "XP Theme Color Tabs With Gradient" block that used to sit
+		// here: it read fgColor/bgcolor1/bgcolor2 from the active EDITOR style's
+		// <tabStyle> tag and applied them to the selected tab unconditionally, at
+		// startup, regardless of the separate UI dark/light toggle. That's exactly
+		// what was making the selected tab illegible — GhostRider's tabStyle is
+		// (light near-white, matching its dark editor), and nothing ever re-applied
+		// it or reset it once UITheme's own dark/light logic (see UITheme.apply's
+		// CTabFolder case) started managing the same two properties independently.
+		// Two systems owning the same colors with no coordination between them.
+		// UITheme is the single source of truth for this now: OS default selection
+		// colors in light mode, themed ones only when dark mode is actually on.
+
 		// Drag tab code start
 		// Close tab with middle mouse code start
 		// Tab history code start
@@ -2837,25 +3021,14 @@ public class MainShell {
 		SymitarFile file = (SymitarFile) (item).getData("file");
 
 		if (file != null) {
-			// Remove from error list
-			for (TableItem eItem : tblErrors.getItems()) {
-				if (((SymitarFile) eItem.getData("file")).equals(file))
-					eItem.dispose();
+			// tblErrors and tblTasks are the same unified Problems table now —
+			// one pass removes both error and task rows for this file.
+			for (TableItem row : tblErrors.getItems()) {
+				if (((SymitarFile) row.getData("file")).equals(file))
+					row.dispose();
 			}
 
-			for (TableItem tItem : tblTasks.getItems()) {
-				if (((SymitarFile) tItem.getData("file")).equals(file))
-					tItem.dispose();
-			}
-
-			for( CTabItem tab: ((CTabFolder)tblErrors.getParent()).getItems() ) {
-				if( tab.getText().indexOf("Errors") != -1 ) {
-					tab.setText("Errors (" + tblErrors.getItemCount() + ")" );
-				} else if( tab.getText().indexOf("Tasks") != -1 ) {
-					tab.setText("Tasks (" + tblTasks.getItemCount() + ")" );
-				}
-			}
-
+			updateBottomVisibility();
 		}
 	}
 
@@ -2892,26 +3065,41 @@ public class MainShell {
 		return true;
 	}
 
+	/**
+	 * Errors, warnings, and tasks used to live in separate Errors/Tasks tabs the
+	 * user had to click between. They share the same Description/RepGen/Location
+	 * shape already (differing only by row icon), so they're one "Problems" list
+	 * now — no tab-switching, and the row icon (error/warning/TODO/FIXME/etc, set
+	 * by RepgenParser) is enough to tell them apart. tblTasks is the same Table
+	 * instance as tblErrors; kept as a separate field since RepgenParser fetches
+	 * them independently via getErrorTable()/getTaskTable() and tags each row
+	 * with "error" or "task" data to tell its own rows apart on refresh.
+	 */
 	private void createBottom(Composite self) {
 		self.setLayout(new FillLayout());
-		CTabFolder folder = new CTabFolder(self, SWT.TOP | SWT.BORDER);
-		folder.setLayout(new FillLayout());
-		folder.setSimple(false);
-		// Apply tab theme/style
-		folder.setSelectionForeground(titleForeColor);
-		folder.setSelectionBackground(new Color[] { titleBackColor1,titleBackColor2 }, new int[] { 100 }, true);
-		
-		final CTabItem errors = new CTabItem(folder, SWT.NONE);
-		errors.setText("&Errors");
-		errors.setImage(RepDevMain.smallErrorsImage);
-		tblErrors = new Table(folder, SWT.MULTI | SWT.FULL_SELECTION);
+
+		tblErrors = new Table(self, SWT.MULTI | SWT.FULL_SELECTION);
 		createTable(tblErrors);
+		tblTasks = tblErrors;
+
 		tblErrors.addSelectionListener(new SelectionAdapter() {
 			public void widgetDefaultSelected(SelectionEvent e) {
 				TableItem item = (TableItem) e.item;
 				int sym = (Integer) item.getData("sym");
-				Error error = (Error) item.getData("error");
-				SymitarFile file = new SymitarFile(sym, error.getFile(), FileType.REPGEN);
+				SymitarFile file;
+				int line, col;
+
+				if (item.getData("error") != null) {
+					Error error = (Error) item.getData("error");
+					file = new SymitarFile(sym, error.getFile(), FileType.REPGEN);
+					line = error.getLine();
+					col = error.getCol();
+				} else {
+					Task task = (Task) item.getData("task");
+					file = new SymitarFile(sym, task.getFile(), FileType.REPGEN);
+					line = task.getLine();
+					col = task.getCol();
+				}
 
 				Object o = openFile(file);
 
@@ -2920,13 +3108,12 @@ public class MainShell {
 				if (o instanceof EditorComposite)
 					editor = (EditorComposite) o;
 
-				if (error.getLine() >= 0 && editor != null) {
-					// Error line/col are model coords (1-based, as returned by
-					// Symitar / lineColAt). gotoModelLine takes 0-based model
-					// line/col and auto-expands any enclosing fold so the
-					// error site is visible even when its section is collapsed.
-					int modelLine = Math.max(0, error.getLine() - 1);
-					int modelCol = Math.max(0, error.getCol() - 1);
+				if (line >= 0 && editor != null) {
+					// Line/col are 1-based model coords (Symitar / lineColAt);
+					// gotoModelLine takes 0-based model line/col and auto-expands
+					// any enclosing fold so the site is visible even collapsed.
+					int modelLine = Math.max(0, line - 1);
+					int modelCol = Math.max(0, col - 1);
 					if (editor.gotoModelLine(modelLine, modelCol)) {
 						editor.lineHighlight();
 						addToNavHistory(editor.getFile(), editor.getStyledText().getLineAtOffset(editor.getStyledText().getCaretOffset()));
@@ -2935,49 +3122,39 @@ public class MainShell {
 				}
 			}
 		});
+	}
 
-		errors.setControl(tblErrors);
+	/**
+	 * Shows/hides the bottom Problems panel (and its sash) based on whether
+	 * there's anything to report — it used to always reserve screen space even
+	 * empty. Called whenever the table's contents change (see RepgenParser's
+	 * error/task refresh) and once at startup.
+	 */
+	public void updateBottomVisibility() {
+		if (shell.isDisposed() || tblErrors == null || tblErrors.isDisposed()) return;
+		boolean hasItems = tblErrors.getItemCount() > 0;
+		if (hasItems == bottom.getVisible()) return;
 
-		final CTabItem tasks = new CTabItem(folder, SWT.NONE);
-		tasks.setText("&Tasks");
-		tasks.setImage(RepDevMain.smallTasksImage);
-		tblTasks = new Table(folder, SWT.MULTI | SWT.FULL_SELECTION);
-		createTable(tblTasks);
+		// FormLayout doesn't have GridData's "exclude" — but that's fine here:
+		// sashHoriz/bottom are invisible and paint nothing, and main's own
+		// FormData below is what actually determines how far down it extends,
+		// independent of their now-unused phantom bounds.
+		sashHoriz.setVisible(hasItems);
+		bottom.setVisible(hasItems);
 
-		tblTasks.addSelectionListener(new SelectionAdapter() {
-			public void widgetDefaultSelected(SelectionEvent e) {
-				TableItem item = (TableItem) e.item;
-				int sym = (Integer) item.getData("sym");
-				Task task = (Task) item.getData("task");
-				SymitarFile file = new SymitarFile(sym, task.getFile(), FileType.REPGEN);
+		FormData mainData = new FormData();
+		mainData.top = new FormAttachment(coolBar);
+		mainData.left = new FormAttachment(0);
+		mainData.right = new FormAttachment(100);
+		mainData.bottom = hasItems ? new FormAttachment(sashHoriz) : new FormAttachment(100);
+		main.setLayoutData(mainData);
 
-				Object o = openFile(file);
+		if (hasItems) {
+			int h = Config.getSashHSize() != 0 ? Config.getSashHSize() : 150;
+			frmSashHoriz.top = new FormAttachment(100, -h);
+		}
 
-				EditorComposite editor = null;
-
-				if (o instanceof EditorComposite)
-					editor = (EditorComposite) o;
-
-				if (task.getLine() >= 0 && editor != null) {
-					// Task line/col are 0-based model coords (set by the task
-					// scanner via lineColAt). gotoModelLine handles fold
-					// expansion + view translation; preserving the historical
-					// MainShell semantic where task.getLine() is treated as
-					// 1-based for navigation by subtracting 1.
-					int modelLine = Math.max(0, task.getLine() - 1);
-					int modelCol = Math.max(0, task.getCol() - 1);
-					if (editor.gotoModelLine(modelLine, modelCol)) {
-						editor.lineHighlight();
-						addToNavHistory(editor.getFile(), editor.getStyledText().getLineAtOffset(editor.getStyledText().getCaretOffset()));
-					}
-					editor.getStyledText().setFocus();
-				}
-			}
-		});
-
-		tasks.setControl(tblTasks);
-
-		folder.setSelection(errors);
+		shell.layout(true, true);
 	}
 	SymitarFile currNavFile;
 	int currNavLine;
@@ -3124,6 +3301,22 @@ public class MainShell {
 
 			i++;
 		}
+
+		// Description (column 0) fills whatever's left of the table's actual
+		// width instead of sitting at a fixed 400px — it was the one that most
+		// often got cut off, and unlike RepGen/Location it doesn't have a
+		// natural fixed size of its own.
+		tbl.addControlListener(new ControlAdapter() {
+			public void controlResized(ControlEvent e) {
+				TableColumn[] cols = tbl.getColumns();
+				if (cols.length == 0) return;
+				int fixed = 0;
+				for (int c = 1; c < cols.length; c++) fixed += cols[c].getWidth();
+				int descWidth = tbl.getClientArea().width - fixed;
+				if (descWidth < MIN_COL_WIDTH) descWidth = MIN_COL_WIDTH;
+				if (cols[0].getWidth() != descWidth) cols[0].setWidth(descWidth);
+			}
+		});
 	}
 
 	public void createMenuDefault() {
@@ -3429,6 +3622,14 @@ public class MainShell {
 			}
 		});
 
+		final MenuItem editFindPrevious = new MenuItem(editMenu, SWT.PUSH);
+		editFindPrevious.setText("Find Previous\tShift+F3");
+		editFindPrevious.addSelectionListener(new SelectionAdapter() {
+			public void widgetSelected(SelectionEvent arg0) {
+				findPrevious();
+			}
+		});
+
 		final MenuItem editGotoLine = new MenuItem(editMenu, SWT.PUSH);
 		editGotoLine.setText("Goto Line\tCTRL+L");
 		editGotoLine.addSelectionListener(new SelectionAdapter() {
@@ -3683,7 +3884,11 @@ public class MainShell {
 	}
 
 	public void findNext() {
-		findReplaceShell.find();
+		findReplaceShell.findNext();
+	}
+
+	public void findPrevious() {
+		findReplaceShell.findPrevious();
 	}
 
 	public void showOptions() {
@@ -3762,12 +3967,21 @@ public class MainShell {
 	
 	/**
 	 * Add a toolbar to the coolBar (sorry, but no pun intended.)
+	 *
+	 * Must be called AFTER the ToolBar's items exist: computeSize() below snapshots
+	 * whatever's in it right now, and a CoolItem never re-measures on its own. Call
+	 * this on an empty ToolBar (as createEditorBar() used to) and the CoolItem locks
+	 * in near-zero width forever — the whole toolbar silently never gets screen space,
+	 * even though every item on it is perfectly fine. That's what was hiding Save/
+	 * Run/Print/etc. entirely once the (now-wider, DPI-scaled) explorer toolbar
+	 * stopped leaving enough slack width for the layout to paper over it.
 	 */
 	public void addBar(ToolBar b) {
 		CoolItem item = new CoolItem(coolBar, SWT.NONE);
 		item.setControl(b);
 		Point size = b.computeSize(SWT.DEFAULT, SWT.DEFAULT);
 		item.setMinimumSize(size);
+		item.setSize(item.computeSize(size.x, size.y));
 
 		coolItems.add(item);
 	}
@@ -3779,14 +3993,14 @@ public class MainShell {
 	public void toggleFullScreen()
 	{
 		if(fullscreen){
-			fscreen.setImage(RepDevMain.smallIndentLessImage);
+			fscreen.setImage(RepDevMain.smallPanelsCollapseImage);
 			frmSashVert.left = new FormAttachment(0, Config.getSashVSize());
 			frmSashHoriz.top = new FormAttachment (100, -Config.getSashHSize());
 			shell.layout();
 			//sashVert.setVisible(true);
 			fullscreen = false;
 		}else{
-			fscreen.setImage(RepDevMain.smallIndentMoreImage);
+			fscreen.setImage(RepDevMain.smallPanelsExpandImage);
 			//sashVert.setSize(0, sashVert.getBounds().height);
 			//left.setSize(0, left.getBounds().height);
 			frmSashVert.left = new FormAttachment(0, 0);
@@ -3799,37 +4013,45 @@ public class MainShell {
 	private void createEditorBar() {
 		editorBar = new ToolBar(coolBar, SWT.FLAT);
 		editorBar.setData("editorComposite");
-		addBar(editorBar);
+		// addBar(editorBar) moved to the end of this method, after every ToolItem
+		// below exists — see addBar()'s javadoc for why the order matters.
 
 		savetb = new ToolItem(editorBar, SWT.NONE);
 		savetb.setImage(RepDevMain.smallActionSaveImage);
+		savetb.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallActionSaveImage));
 		savetb.setToolTipText("Saves the current file.");
 		savetb.setEnabled(false);
 
 		install = new ToolItem(editorBar, SWT.NONE);
 		install.setImage(RepDevMain.smallInstallImage);
+		install.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallInstallImage));
 		install.setToolTipText("Installs current file for onDemand use.");
 		install.setEnabled(false);
 
 		run = new ToolItem(editorBar, SWT.NONE);
 		run.setImage(RepDevMain.smallRunImage);
+		run.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallRunImage));
 		run.setToolTipText("Opens the run report dialog.");
 		run.setEnabled(false);
 
 		print = new ToolItem(editorBar, SWT.NONE);
 		print.setImage(RepDevMain.smallPrintImage);
+		print.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallPrintImage));
 		print.setToolTipText("Prints the current file to a local printer.");
 		print.setEnabled(false);
 
 		hltoggle = new ToolItem(editorBar, SWT.NONE);
 		hltoggle.setImage(RepDevMain.smallHighlight);
+		hltoggle.setDisabledImage(RepDevMain.dimIcon(RepDevMain.smallHighlight));
 		hltoggle.setToolTipText("Toggles the coloring of text");
 		hltoggle.setEnabled(false);
 		
 		fscreen = new ToolItem(editorBar, SWT.NONE);
-		fscreen.setImage(RepDevMain.smallIndentLessImage);
+		fscreen.setImage(RepDevMain.smallPanelsCollapseImage);
 		fscreen.setToolTipText("Toggles the visibility of the Explorer and Tasks panels");
 		//fscreen.setEnabled(false);
+
+		addBar(editorBar);
 
 		// EditorBar button actions
 		
@@ -3924,7 +4146,7 @@ public class MainShell {
 	private void setMainTitle(){
 		String server = "";
 		int sym;
-		
+
 		if(Config.getHostNameInTitle()) {
 			if (mainfolder.getSelection() != null && mainfolder.getSelection().getControl() instanceof EditorComposite && (mainfolder.getSelection() != null && ((EditorComposite) mainfolder.getSelection().getControl()).getFile() instanceof SymitarFile)) {
 				SymitarFile file =  ((EditorComposite) mainfolder.getSelection().getControl()).getFile();
@@ -3934,12 +4156,40 @@ public class MainShell {
 				}
 			}
 		}
-		
+
 		if (Config.getFileNameInTitle())
 			shell.setText(mainfolder.getSelection().getText() + " - " +RepDevMain.NAMESTR + server);
 		else
 			shell.setText(RepDevMain.NAMESTR + server);
-		
+
+		updateSymIndicator();
+	}
+
+	/**
+	 * Refreshes the toolbar's "which sym am I in" label: prefers the active editor
+	 * tab's sym (matching what setMainTitle() puts in the window title), falling
+	 * back to whatever sym the current tree selection is under so it's still useful
+	 * before any file is open.
+	 */
+	private void updateSymIndicator() {
+		if (symIndicatorItem == null || symIndicatorItem.isDisposed())
+			return;
+
+		Integer sym = null;
+
+		if (mainfolder.getSelection() != null && mainfolder.getSelection().getControl() instanceof EditorComposite) {
+			Object file = ((EditorComposite) mainfolder.getSelection().getControl()).getFile();
+			if (file instanceof SymitarFile && !((SymitarFile) file).isLocal())
+				sym = ((SymitarFile) file).getSym();
+		}
+
+		if (sym == null) {
+			int treeSym = getCurrentTreeSym();
+			if (treeSym != -1)
+				sym = treeSym;
+		}
+
+		symIndicatorItem.setText(sym != null ? "Sym " + sym : "No Sym");
 	}
 
 //	public ArrayList<EditorComposite> getEditorCompositeList() {

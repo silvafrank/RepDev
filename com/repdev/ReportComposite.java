@@ -38,7 +38,10 @@ import org.eclipse.swt.layout.FormData;
 import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
+import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Link;
+import org.eclipse.swt.widgets.Listener;
+import org.eclipse.swt.widgets.Sash;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
 import org.eclipse.swt.widgets.TableItem;
@@ -129,45 +132,81 @@ public class ReportComposite extends Composite implements TabTextView{
 			}			
 		});
 		
+		final TableColumn titleCol = new TableColumn(table,SWT.NONE);
+		titleCol.setText("Title");
+		titleCol.setWidth(230);
+
+		final TableColumn seqCol = new TableColumn(table,SWT.NONE);
+		seqCol.setText("Sequence");
+		seqCol.setWidth(70);
+
+		final TableColumn pagesCol = new TableColumn(table,SWT.NONE);
+		pagesCol.setText("Pages");
+		pagesCol.setWidth(50);
+
+		final TableColumn sizeCol = new TableColumn(table,SWT.NONE);
+		sizeCol.setText("Size");
+		sizeCol.setWidth(70);
+
+		final TableColumn dateCol = new TableColumn(table,SWT.NONE);
+		dateCol.setText("Date");
+		dateCol.setWidth(150);
+
 		TableColumn col = new TableColumn(table,SWT.NONE);
-		col.setText("Title");
-		col.setWidth(230);
-		
-		col = new TableColumn(table,SWT.NONE);
-		col.setText("Sequence");
-		col.setWidth(70);
-		
-		col = new TableColumn(table,SWT.NONE);
-		col.setText("Pages");
-		col.setWidth(50);
-		
-		col = new TableColumn(table,SWT.NONE);
-		col.setText("Size");
-		col.setWidth(70);
-		
-		col = new TableColumn(table,SWT.NONE);
-		col.setText("Date");
-		col.setWidth(150);
-		
-		col = new TableColumn(table,SWT.NONE);
 		col.setText("Options");
-		col.setWidth(200);
+		// 200px was too narrow for "Print: Local Host LPT  Run as FM" at normal
+		// font sizes - the Link wraps, and since the row height is never set to
+		// fit two lines, the wrapped "Run as FM" anchor gets clipped off and is
+		// invisible even though it's still there and clickable if you resize the column.
+		col.setWidth(300);
 		
+		// Title (column 0) fills whatever's left of the table's actual width
+		// instead of a fixed 230px, so long report names stop getting clipped.
+		final int MIN_TITLE_WIDTH = 100;
+		table.addControlListener(new org.eclipse.swt.events.ControlAdapter(){
+			public void controlResized(org.eclipse.swt.events.ControlEvent e) {
+				int fixed = 0;
+				for (TableColumn c : table.getColumns())
+					if (c != titleCol) fixed += c.getWidth();
+				int titleWidth = table.getClientArea().width - fixed;
+				if (titleWidth < MIN_TITLE_WIDTH) titleWidth = MIN_TITLE_WIDTH;
+				if (titleCol.getWidth() != titleWidth) titleCol.setWidth(titleWidth);
+			}
+		});
+
 		FormData data = new FormData();
 		data.left = new FormAttachment(0);
 		data.right = new FormAttachment(100);
 		data.top = new FormAttachment(0);
-		data.height = 48;
+		// Real height (fit to content, up to a cap) set below once item count is known.
 		table.setLayoutData(data);
 
+		// Draggable divider so the results list can be resized instead of being
+		// stuck scrolling one row at a time with the arrow keys.
+		Sash tableSash = new Sash(this, SWT.HORIZONTAL | SWT.SMOOTH);
+		FormData frmSash = new FormData();
+		frmSash.left = new FormAttachment(0);
+		frmSash.right = new FormAttachment(100);
+		frmSash.top = new FormAttachment(table);
+		tableSash.setLayoutData(frmSash);
+		tableSash.addListener(SWT.Selection, new Listener(){
+			public void handleEvent(Event e) {
+				int min = table.getHeaderHeight() + table.getItemHeight();
+				int max = getSize().y - min;
+				int h = Math.max(min, Math.min(e.y, max));
+				data.height = h;
+				layout(true, true);
+			}
+		});
+
 		FormData frmTxt = new FormData();
-		frmTxt.top = new FormAttachment(table);
+		frmTxt.top = new FormAttachment(tableSash);
 		frmTxt.left = new FormAttachment(0);
 		frmTxt.right = new FormAttachment(100);
 		frmTxt.bottom = new FormAttachment(100);
 		txt.setLayoutData(frmTxt);
 
-		
+
 		if( file != null){
 			txt.setText(file.getData());
 			
@@ -218,12 +257,27 @@ public class ReportComposite extends Composite implements TabTextView{
 			}
 		}
 		
+		// Fixed guesses (70/50/70/150) clipped whenever real data ran longer -
+		// pack() sizes each to its actual content (or header, whichever is wider).
+		seqCol.pack();
+		pagesCol.pack();
+		sizeCol.pack();
+		dateCol.pack();
+
 		if( table.getItemCount() > 0 ){
 			table.setSelection(0);
 			openTableItem();
 		}
 		else
 			txt.setText("Error loading file");
+
+		// Default height fits however many rows are actually there (up to 8,
+		// so a huge batch run doesn't crowd out the preview below) instead of
+		// the old fixed 48px sliver that only ever showed ~2 rows regardless
+		// of how many report files came back. Still just a starting point —
+		// the sash above lets it be dragged taller or shorter from here.
+		int rowsToShow = Math.max(1, Math.min(table.getItemCount(), 8));
+		data.height = table.getHeaderHeight() + table.getItemHeight() * rowsToShow + 4;
 	}
 	
 	protected void runFM(PrintItem item) {

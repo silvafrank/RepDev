@@ -23,6 +23,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,6 +42,12 @@ public class DatabaseLayout {
 	// Cached after loading to compare easily to tokens in the syntax
 	private HashSet<String> lowerCaseRecordNames = new HashSet<String>();
 	private HashSet<String> lowerCaseFieldNames = new HashSet<String>();
+	// Record-scoped lookups (Token#dbFieldValid[NoSubFld] needs "does THIS record
+	// have THIS field", not just "does any field with this name exist anywhere") —
+	// used to be a linear scan of every record in the whole DB (hundreds+, per the
+	// db.txt this loads) for every colon-adjacent token on every repaint.
+	private HashMap<String, Record> recordByName = new HashMap<String, Record>();
+	private HashMap<String, HashSet<String>> fieldNamesByRecord = new HashMap<String, HashSet<String>>();
 
 	private DatabaseLayout() {
 		Pattern recPattern, fieldPattern;
@@ -106,10 +113,17 @@ public class DatabaseLayout {
 			flat = getFlatRecordsWorker(tree);
 
 			for (Record cur : flat) {
-				lowerCaseRecordNames.add(cur.getName().toLowerCase());
+				String recName = cur.getName().toLowerCase();
+				lowerCaseRecordNames.add(recName);
+				recordByName.put(recName, cur);
 
-				for (Field fCur : cur.getFields())
-					lowerCaseFieldNames.add(fCur.getName().toLowerCase());
+				HashSet<String> fieldNames = new HashSet<String>();
+				for (Field fCur : cur.getFields()) {
+					String fName = fCur.getName().toLowerCase();
+					lowerCaseFieldNames.add(fName);
+					fieldNames.add(fName);
+				}
+				fieldNamesByRecord.put(recName, fieldNames);
 			}
 
 			System.out.println("Loaded DB Layout");
@@ -131,6 +145,17 @@ public class DatabaseLayout {
 
 	public ArrayList<Record> getFlatRecords() {
 		return flat;
+	}
+
+	/** O(1) record lookup by name — was a linear scan of getFlatRecords() at every call site. */
+	public Record getRecordByName(String name) {
+		return recordByName.get(name.toLowerCase());
+	}
+
+	/** O(1) equivalent of scanning getRecordByName(recordName).getFields() for a name match. */
+	public boolean recordHasField(String recordName, String fieldName) {
+		HashSet<String> fields = fieldNamesByRecord.get(recordName.toLowerCase());
+		return fields != null && fields.contains(fieldName.toLowerCase());
 	}
 
 	/**

@@ -57,6 +57,12 @@ public class RepgenParser {
 
 	private ArrayList<Token> ltokens = new ArrayList<>();
 	private ArrayList<Variable> lvars = new ArrayList<>();
+	// Name-only mirror of lvars, rebuilt alongside it in rebuildVars(). The syntax
+	// highlighter asks "is this token a known local variable?" for every non-special
+	// token on every visible line, on every repaint (scroll, blink, keystroke) — an
+	// O(n) scan of lvars per token was measurable on files with 100+ declared vars.
+	// O(1) via this set instead; keep it in sync with lvars, never populate alone.
+	private HashSet<String> lvarNames = new HashSet<>();
 
 	private ArrayList<Token> lasttokens = new ArrayList<>(); //Tokens added in last parse method call
 	private ArrayList<Token> removedtokens = new ArrayList<>(); //Tokens removed
@@ -384,8 +390,10 @@ public class RepgenParser {
 				display.asyncExec(new Runnable() {
 					public void run() {
 						if (!tblErrors.isDisposed()) {
+							// tblErrors/tblTasks are the same unified Problems table —
+							// only clear this file's own error rows here, not its task rows.
 							for (TableItem item : tblErrors.getItems()) {
-								if (((SymitarFile) item.getData("file")).equals(file) && ((Integer) item.getData("sym")) == sym)
+								if (item.getData("error") != null && ((SymitarFile) item.getData("file")).equals(file) && ((Integer) item.getData("sym")) == sym)
 									item.dispose();
 
 							}
@@ -412,12 +420,7 @@ public class RepgenParser {
 								}
 							}
 
-							for( CTabItem tab: ((CTabFolder)tblErrors.getParent()).getItems() ) {
-								if( tab.getText().indexOf("Errors") != -1 ) {
-									tab.setText("&Errors (" + tblErrors.getItemCount() + ")");
-								}
-							}
-
+							RepDevMain.mainShell.updateBottomVisibility();
 						}
 					}
 				});
@@ -483,8 +486,10 @@ public class RepgenParser {
 				display.asyncExec(new Runnable() {
 					public void run() {
 						if (!tblTasks.isDisposed()) {
+							// tblErrors/tblTasks are the same unified Problems table —
+							// only clear this file's own task rows here, not its error rows.
 							for (TableItem item : tblTasks.getItems()) {
-								if (((SymitarFile) item.getData("file")).equals(file) && ((Integer) item.getData("sym")) == sym)
+								if (item.getData("task") != null && ((SymitarFile) item.getData("file")).equals(file) && ((Integer) item.getData("sym")) == sym)
 									item.dispose();
 
 							}
@@ -520,12 +525,8 @@ public class RepgenParser {
 								}
 							}
 
-							for( CTabItem tab: ((CTabFolder)tblTasks.getParent()).getItems() ) {
-								if( tab.getText().indexOf("Tasks") != -1 ) {
-									tab.setText("&Tasks (" + tblTasks.getItemCount() + ")");
-								}
-							}
-							
+							RepDevMain.mainShell.updateBottomVisibility();
+
 						}
 					}
 				});
@@ -1065,6 +1066,8 @@ public class RepgenParser {
 		//Still needs synchronizing, as the method level synchronized doesn't effect calls from the background parsers
 		synchronized(lvars){
 			lvars.addAll(newvars);
+			lvarNames.clear();
+			for (Variable v : lvars) lvarNames.add(v.getName());
 		}
 
 		if (changed && fileName.equals(file.getName())) {
@@ -1267,6 +1270,13 @@ public class RepgenParser {
 
 	public ArrayList<Variable> getLvars() {
 		return lvars;
+	}
+
+	/** O(1) equivalent of scanning getLvars() for a name match — see lvarNames. */
+	public boolean hasLvar(String name) {
+		synchronized (lvars) {
+			return lvarNames.contains(name);
+		}
 	}
 
 	public void setReparse(boolean reparse) {

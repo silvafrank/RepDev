@@ -39,6 +39,12 @@ import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.Session;
+import com.jcraft.jsch.Channel;
+import com.jcraft.jsch.ChannelShell;
+import com.jcraft.jsch.Logger;
+
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.MessageBox;
@@ -69,7 +75,8 @@ public class DirectSymitarSession extends SymitarSession {
 	boolean loggedInAIX = false;
 	boolean useSSH = false;
 	boolean passWillExpire = false;
-	Process p;
+	Session sshSession;
+	Channel sshChannel;
 	int actualSym = -1;
 	int consoleNum = -1;
 	String hostIPA = "";
@@ -188,17 +195,54 @@ public class DirectSymitarSession extends SymitarSession {
 	    }
 		try {
 			if(useSSH){
-				String command = "plink -load aixterm " + server;
-				p = Runtime.getRuntime().exec(command);
-				
-				in = new BufferedReader(new InputStreamReader(p.getInputStream()));
-				out = new PrintWriter(p.getOutputStream());
-				err = new BufferedReader(new InputStreamReader(p.getErrorStream()));
-				
-				pause(700); // This delay is to give time for the Error Stream to capture the data.
-				if(cacheSSHKey() == SessionError.SSH_KEY_CHANGED) {
-					return SessionError.SSH_KEY_CHANGED;
+				// plink used to hang indefinitely on certain networks (no way to bound
+				// its connect); JSch gives us a real socket-level connect timeout instead.
+				// Surface JSch's own protocol-level trace (auth methods offered, partial-
+				// success chains, etc.) so a failed login shows exactly which SSH auth
+				// round failed instead of just the final "too many authentication
+				// failures" disconnect.
+				JSch.setLogger(new Logger() {
+					public boolean isEnabled(int level) { return true; }
+					public void log(int level, String message) { System.out.println("[JSch] " + message); }
+				});
+
+				JSch jsch = new JSch();
+
+				String knownHosts = System.getProperty("user.home") + "/.ssh/known_hosts";
+				if (new File(knownHosts).exists()) {
+					jsch.setKnownHosts(knownHosts);
 				}
+
+				sshSession = jsch.getSession(aixUsername, server, port);
+				sshSession.setConfig("StrictHostKeyChecking", "no");
+				// Tested forcing plain "password" auth: server rejects it outright,
+				// in a single round, with no prompt at all (continuation list drops
+				// to publickey,keyboard-interactive) - PasswordAuthentication is
+				// disabled server-side, so keyboard-interactive is the only usable
+				// method here despite its own separate issue (see SymitarUserInfo).
+				sshSession.setConfig("PreferredAuthentications", "keyboard-interactive,password");
+				sshSession.setPassword(aixPassword);
+				sshSession.setUserInfo(new SymitarUserInfo(aixUsername, aixPassword));
+				sshSession.connect(CONNECT_TIMEOUT_MS);
+
+				sshChannel = sshSession.openChannel("shell");
+				((ChannelShell) sshChannel).setPtyType("aixterm");
+
+				// getInputStream()/getOutputStream() MUST be fetched before connect() —
+				// this is JSch's documented contract, not just style. connect() starts a
+				// background thread pumping incoming SSH data into a fixed 32KB pipe; if
+				// that pipe isn't already being drained (i.e. we call getInputStream()
+				// only *after* connect(), like this used to), enough server-side output
+				// arriving before we get around to reading it fills the pipe and blocks
+				// JSch's pump thread forever. Our own readUntil() below blocks on that
+				// same pipe, so the whole login just hangs — this is the "freezes
+				// entirely, have to force-quit" bug, and it's timing/banner-size
+				// dependent, which is why it only happened sometimes.
+				in = new BufferedReader(new InputStreamReader(sshChannel.getInputStream()));
+				out = new PrintWriter(sshChannel.getOutputStream());
+				err = null;
+
+				sshChannel.connect(5000);
 			} else {
 				// Bound the initial TCP handshake so an unreachable/unresponsive host fails
 				// fast instead of freezing the UI thread indefinitely (connect() is called
@@ -228,37 +272,48 @@ public class DirectSymitarSession extends SymitarSession {
 			}
 
 			traceLog(aixUsername);
-			
+
+			String temp;
 			if(useSSH){
-				out.print(aixUsername + "\r\n");
+				// JSch's keyboard-interactive UserInfo callback already handled the
+				// username/password prompts during sshSession.connect() above; the
+				// shell channel is authenticated, so we just wait for the AIX prompt.
+				temp = readUntil("[c", "$ ", "invalid login name or password");
+				if (temp.indexOf("[c") == -1 && temp.indexOf("$ ") == -1) {
+					if (temp.indexOf("invalid login") != -1) {
+						disconnect();
+						return SessionError.AIX_LOGIN_WRONG;
+					} else {
+						System.out.print(temp);
+						System.out.print("Unsure what happened here.  Check logs!");
+						disconnect();
+						return SessionError.IO_ERROR;
+					}
+				}
 			} else {
 				out.print(aixUsername + "\r");
-			}
-			out.flush();
-			String temp = readUntil("Password:", "password:", "[c");
-		
-			if( temp.indexOf("[c") == -1 ){
-				bSensitiveData = true;
-				if(useSSH){
-					line = writeLog(aixPassword + "\r\n", "[c", "password:", "Password:");
-				} else {
+				out.flush();
+				temp = readUntil("Password:", "password:", "[c");
+
+				if( temp.indexOf("[c") == -1 ){
+					bSensitiveData = true;
 					line = writeLog(aixPassword + "\r", "[c", "invalid login name or password");
-				}
-				bSensitiveData = false;
-	
-				if (line.indexOf("invalid login") != -1 || line.indexOf("password:") != -1 || line.indexOf("Password:") != -1){
-					disconnect();
-					return SessionError.AIX_LOGIN_WRONG;
-				} else if (line.contains("$ ")) {
-					System.out.print(line);
-					System.out.print("It appears we weren't able to bypass text mode.\nYou may have a slow connection.\nOr this console is not setup as a 'Windows PC' in SYMOP.");
-					disconnect();
-					return SessionError.NOT_WINDOWSLEVEL_3;
-				} else if (line.indexOf("[c") == -1) {
-					System.out.print(line);
-					System.out.print("Unsure what happened here.  Check logs!");
-					disconnect();
-					return SessionError.IO_ERROR;
+					bSensitiveData = false;
+
+					if (line.indexOf("invalid login") != -1 || line.indexOf("password:") != -1 || line.indexOf("Password:") != -1){
+						disconnect();
+						return SessionError.AIX_LOGIN_WRONG;
+					} else if (line.contains("$ ")) {
+						System.out.print(line);
+						System.out.print("It appears we weren't able to bypass text mode.\nYou may have a slow connection.\nOr this console is not setup as a 'Windows PC' in SYMOP.");
+						disconnect();
+						return SessionError.NOT_WINDOWSLEVEL_3;
+					} else if (line.indexOf("[c") == -1) {
+						System.out.print(line);
+						System.out.print("Unsure what happened here.  Check logs!");
+						disconnect();
+						return SessionError.IO_ERROR;
+					}
 				}
 			}
 
@@ -369,13 +424,32 @@ public class DirectSymitarSession extends SymitarSession {
 		} catch (IOException e) {
 			e.printStackTrace();
 			disconnect();
-			if(useSSH){
-				return SessionError.PLINK_NOT_FOUND;
-			} else {
-				return SessionError.IO_ERROR;
+			return SessionError.IO_ERROR;
+		} catch (com.jcraft.jsch.JSchException e) {
+			// "Auth fail" is what JSch throws once every configured auth method is
+			// exhausted without success - the real signal for a wrong password now
+			// that SymitarUserInfo always answers prompts instead of guessing.
+			// "Auth cancel" is kept as a fallback in case UserInfo ever declines again.
+			// Matching on message text is the only way to tell these apart from a real
+			// session/channel connect failure - this jsch fork doesn't expose a typed
+			// exception for either case.
+			if (e.getMessage() != null
+					&& (e.getMessage().startsWith("Auth fail") || e.getMessage().startsWith("Auth cancel"))) {
+				System.out.println("SSH auth failed: " + e.getMessage());
+				disconnect();
+				return SessionError.AIX_LOGIN_WRONG;
 			}
+			e.printStackTrace();
+			disconnect();
+			return SessionError.IO_ERROR;
+		} catch (Exception e) {
+			// Anything else unchecked (e.g. JSch's SSH_MSG_DISCONNECT wraps as an
+			// unchecked JSchSessionDisconnectException, not an IOException).
+			e.printStackTrace();
+			disconnect();
+			return SessionError.IO_ERROR;
 		}
-		
+
 		loggedInAIX = true;
 		return loginUser(userID);
 	}
@@ -736,8 +810,15 @@ public class DirectSymitarSession extends SymitarSession {
 		}
 
 		try {
-			if( useSSH && p != null)
-				p.destroy();
+			if( sshChannel != null)
+				sshChannel.disconnect();
+		} catch (Exception e) {
+			hadError = true;
+		}
+
+		try {
+			if( sshSession != null)
+				sshSession.disconnect();
 		} catch (Exception e) {
 			hadError = true;
 		}
@@ -1946,41 +2027,5 @@ public class DirectSymitarSession extends SymitarSession {
 		}
 	}
 
-
-	private SessionError cacheSSHKey() {
-		int iData = 0;
-		String sData = "";
-		
-		try {
-			while(err.ready()) {
-				iData = err.read();
-				sData += (char)iData;
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		
-		if(sData.indexOf("host key is not cached")>-1) {
-			System.out.println("\r\n" + sData + "\r\n");
-			System.out.println("Caching the SSH Key...");
-			out.print("y\r");
-			out.flush();
-		} else if(sData.indexOf("host key does not match")>-1) {
-			System.out.println("\n   *** HOST KEY HAS CHANGED ! ! ! ***\n       RepDev TERMINATED");
-			disconnect();
-			return SessionError.SSH_KEY_CHANGED;
-		}
-		
-		return SessionError.NONE;
-	}
-
-	
-	private void pause(int msec) {
-		try {
-			Thread.sleep(msec);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-	}
 
 }

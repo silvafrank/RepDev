@@ -72,7 +72,16 @@ public class Config implements Serializable {
 	private String noErrorCheckPrefix = "INC.";
 	private boolean fileNameInWinTitle = true;
 	private boolean hostInTitle = true;
-	private boolean viewLineNumbers = true;
+	// Both of these are stored inverted on purpose, same trick as foldingDisabled
+	// below: existing repdev.conf files serialized before a field existed leave it
+	// at Java's boolean default (false) on load, completely ignoring the field
+	// initializer here. Storing the "off" sense means that silent false default
+	// maps to dark mode ON / line numbers SHOWN — the intended defaults — instead
+	// of quietly flipping upgraders back to light mode with no line numbers, which
+	// is exactly what was happening before this fix. Always go through the
+	// get/set methods below, never these fields directly.
+	private boolean lightMode = false;
+	private boolean hideLineNumbers = false;
 	// Stored inverted on purpose: existing repdev.conf files were serialized before this
 	// field existed, so on load Java sets it to the boolean default (false). Keeping the
 	// "disabled" sense means that default maps to folding ENABLED, matching the intended
@@ -424,6 +433,22 @@ public class Config implements Serializable {
 	}
 
 	/**
+	 * Return true if the dark UI theme (toggled from the main toolbar) is enabled.
+	 * @return boolean
+	 */
+	public static boolean getDarkMode(){
+		return !me.lightMode;
+	}
+
+	/**
+	 * Set whether the dark UI theme is enabled.
+	 * @param boolean
+	 */
+	public static void setDarkMode(boolean b){
+		me.lightMode = !b;
+	}
+
+	/**
 	 * Return true if Case Sensiive is checked in the FindReplaceShell dialogue box.
 	 * @return boolean
 	 */
@@ -545,11 +570,11 @@ public class Config implements Serializable {
 	}
 
 	public static void setViewLineNumbers(boolean lineNumbers){
-		me.viewLineNumbers = lineNumbers;
+		me.hideLineNumbers = !lineNumbers;
 	}
 
 	public static boolean getViewLineNumbers(){
-		return me.viewLineNumbers;
+		return !me.hideLineNumbers;
 	}
 
 	public static void setFoldingEnabled(boolean enabled){

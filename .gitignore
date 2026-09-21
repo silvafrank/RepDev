@@ -2,6 +2,14 @@
 helpmenu.conf
 repdev.conf
 
+# Local run artifacts from the launcher's "start with logging" flow — these get
+# repopulated with real session output (hostnames, usernames, stack traces) on
+# every run, so they shouldn't be swept into a commit.
+run_log.txt
+stdout.txt
+stderr.txt
+/backup/
+
 
 #ignore thumbnails created by windows
 Thumbs.db
@@ -32,3 +40,12 @@ obj/
 _ReSharper*/
 [Tt]est[Rr]esult*
 /dist/
+
+# Gradle/Kotlin build output and caches (newdev/ module) — regenerated locally,
+# can embed absolute local paths, shouldn't be committed.
+newdev/**/build/
+newdev/**/.gradle/
+
+# Per-developer Gradle JDK toolchain override — hardcodes a local install path
+# that won't exist on anyone else's machine.
+newdev/gradle.properties

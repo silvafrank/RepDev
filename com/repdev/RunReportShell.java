@@ -30,7 +30,6 @@ import org.eclipse.swt.layout.FormLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
-import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.ProgressBar;
@@ -97,7 +96,7 @@ public class RunReportShell {
 		Text symText = new Text(shell,SWT.READ_ONLY | SWT.BORDER);
 		symText.setText(String.valueOf(sym));
 		
-		Group promptGroup = new Group(shell,SWT.NONE);
+		Section promptGroup = new Section(shell,SWT.NONE);
 		promptGroup.setText("User Prompt Options");
 		layout = new FormLayout();
 		layout.marginTop = 5;
@@ -108,7 +107,7 @@ public class RunReportShell {
 		promptGroup.setLayout(layout);
 		
 		
-		Group queueGroup = new Group(shell,SWT.NONE);
+		Section queueGroup = new Section(shell,SWT.NONE);
 		layout = new FormLayout();
 		layout.marginTop = 5;
 		layout.marginBottom = 5;
@@ -184,7 +183,7 @@ public class RunReportShell {
 			
 		});
 		
-		Group ioGroup = new Group(shell,SWT.NONE);
+		Section ioGroup = new Section(shell,SWT.NONE);
 		ioGroup.setText("Report Run I/O");
 		layout = new FormLayout();
 		layout.marginTop = 5;
@@ -354,7 +353,7 @@ public class RunReportShell {
 		
 		data = new FormData();
 		data.left = new FormAttachment(0);
-		data.top = new FormAttachment(promptGroup);
+		data.top = new FormAttachment(promptGroup, 8); // breathing room between stacked sections now that there's no GroupBox border to separate them
 		data.right = new FormAttachment(ioGroup);
 		queueGroup.setLayoutData(data);
 		

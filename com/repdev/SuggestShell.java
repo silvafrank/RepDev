@@ -519,7 +519,16 @@ public class SuggestShell {
 						else
 							open();
 					}
-	
+					// Modern auto-trigger: pop suggestions as soon as an identifier starts,
+					// instead of requiring Ctrl+Space/':'/'@' every time. Gated on a bare
+					// letter with no modifier so it doesn't fire under Ctrl/Alt shortcuts;
+					// update()'s own "not in a comment/string" guard and empty-result
+					// auto-close (see notFound above) already keep it from popping up
+					// somewhere inappropriate or lingering with zero matches.
+					else if (!open && e.stateMask == SWT.NONE && Character.isLetter(e.character)) {
+						open();
+					}
+
 
 				}
 	

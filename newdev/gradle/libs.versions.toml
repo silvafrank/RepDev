@@ -1,0 +1,19 @@
+[versions]
+kotlin = "2.1.0"
+compose = "1.7.3"
+coroutines = "1.9.0"
+# Apache MINA SSHD: the maintained (ASF-backed, most active) replacement for
+# jsch. See newdev/DECISIONS.md for why this over the mwiede/jsch fork.
+sshd = "2.19.0"
+serialization-json = "1.7.3"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization-json" }
+sshd-core = { module = "org.apache.sshd:sshd-core", version.ref = "sshd" }
+
+[plugins]
+kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
